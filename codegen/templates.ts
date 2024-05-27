@@ -1,4 +1,5 @@
 import { assert } from 'console';
+import { isatty } from 'tty';
 
 import { CodegenContext, Operator, OperatorArguments, ReturnType } from './common';
 import { ArgumentType, OverloadSignature } from './testgen';
@@ -28,8 +29,8 @@ library Common {
 `;
 }
 
-function binaryOperatorImpl(op: Operator, isScalar: boolean, isEncrypted: boolean): string {
-  const fname = operatorFheLibFunction(op);
+function binaryOperatorImpl(op: Operator, isScalar: boolean, isEncrypted: boolean, isTeeOperation: boolean): string {
+  const fname = operatorFheLibFunction(op, isTeeOperation);
   const scalarArg = isScalar && isEncrypted ? ', bool scalar' : '';
   const scalarByte = isScalar ? '0x01' : '0x00';
   const scalarSection =
@@ -50,17 +51,17 @@ function binaryOperatorImpl(op: Operator, isScalar: boolean, isEncrypted: boolea
   );
 }
 
-export function implSol(ctx: CodegenContext, operators: Operator[]): string {
+export function implSol(ctx: CodegenContext, operators: Operator[], isTeeOperation: boolean): string {
   const res: string[] = [];
 
-  const fheLibInterface = generateImplFhevmLibInterface(operators);
+  const fheLibInterface = generateImplFhevmLibInterface(operators, isTeeOperation);
 
   res.push(`
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 
 pragma solidity ^0.8.20;
 
-import "./TFHE.sol";
+// import "./TFHE.sol";
 
 ${fheLibInterface}
 
@@ -79,26 +80,31 @@ library Impl {
   operators.forEach((op) => {
     switch (op.arguments) {
       case OperatorArguments.Binary:
-        res.push(binaryOperatorImpl(op, op.hasScalar, op.hasEncrypted));
+        res.push(binaryOperatorImpl(op, op.hasScalar, op.hasEncrypted, isTeeOperation));
         break;
       case OperatorArguments.Unary:
-        res.push(unaryOperatorImpl(op));
+        res.push(unaryOperatorImpl(op, isTeeOperation));
         break;
     }
   });
 
-  res.push(implCustomMethods(ctx));
+  res.push(implCustomMethods(ctx, isTeeOperation));
 
   res.push('}\n');
 
   return res.join('');
 }
 
-function operatorFheLibFunction(op: Operator): string {
+function operatorFheLibFunction(op: Operator, isTeeOperation: boolean): string {
   if (op.fheLibName) {
-    return op.fheLibName;
+    if (isTeeOperation) {
+      if (op.fheLibName.startsWith('fhe')) {
+        // Remove the old prefix and prepend the new prefix
+        return 'tee' + op.fheLibName.slice(3);
+      }
+    } else return op.fheLibName;
   }
-  return `fhe${capitalizeFirstLetter(op.name)}`;
+  return `tee${capitalizeFirstLetter(op.name)}`;
 }
 
 function capitalizeFirstLetter(input: string): string {
@@ -107,12 +113,12 @@ function capitalizeFirstLetter(input: string): string {
   return `${firstLetter}${theRest}`;
 }
 
-function generateImplFhevmLibInterface(operators: Operator[]): string {
+function generateImplFhevmLibInterface(operators: Operator[], isTeeOperation: boolean): string {
   const res: string[] = [];
 
   res.push('interface FhevmLib {');
   operators.forEach((op) => {
-    let functionName = operatorFheLibFunction(op);
+    let functionName = operatorFheLibFunction(op, isTeeOperation);
     const tail = 'external pure returns (uint256 result);';
     let functionArguments: string;
     switch (op.arguments) {
@@ -127,24 +133,33 @@ function generateImplFhevmLibInterface(operators: Operator[]): string {
     }
   });
 
-  res.push(fheLibCustomInterfaceFunctions());
+  res.push(fheLibCustomInterfaceFunctions(isTeeOperation));
 
   res.push('}');
 
   return res.join('\n');
 }
 
-function fheLibCustomInterfaceFunctions(): string {
-  return `
-    function reencrypt(uint256 ct, uint256 publicKey) external view returns (bytes memory);
-    function fhePubKey(bytes1 fromLib) external view returns (bytes memory result);
-    function verifyCiphertext(bytes memory input) external pure returns (uint256 result);
-    function cast(uint256 ct, bytes1 toType) external pure returns (uint256 result);
-    function trivialEncrypt(uint256 ct, bytes1 toType) external pure returns (uint256 result);
-    function decrypt(uint256 ct) external view returns (uint256 result);
-    function fheIfThenElse(uint256 control, uint256 ifTrue, uint256 ifFalse) external pure returns (uint256 result);
-    function fheRand(bytes1 randType) external view returns (uint256 result);
-    function fheRandBounded(uint256 upperBound, bytes1 randType) external view returns (uint256 result);
+function fheLibCustomInterfaceFunctions(isTeeOperation: boolean): string {
+  if (!isTeeOperation)
+    return `
+      function reencrypt(uint256 ct, uint256 publicKey) external view returns (bytes memory);
+      function fhePubKey(bytes1 fromLib) external view returns (bytes memory result);
+      function verifyCiphertext(bytes memory input) external pure returns (uint256 result);
+      function cast(uint256 ct, bytes1 toType) external pure returns (uint256 result);
+      function trivialEncrypt(uint256 ct, bytes1 toType) external pure returns (uint256 result);
+      function decrypt(uint256 ct) external view returns (uint256 result);
+      function fheIfThenElse(uint256 control, uint256 ifTrue, uint256 ifFalse) external pure returns (uint256 result);
+      function fheRand(bytes1 randType) external view returns (uint256 result);
+      function fheRandBounded(uint256 upperBound, bytes1 randType) external view returns (uint256 result);
+    `;
+  else
+    return `
+    function teeEncrypt(uint256 ct, bytes1 toType) external pure returns (uint256 result);
+    function teeDecrypt(uint256 ct) external view returns (uint256 result);
+    function teeCast(uint256 ct, bytes1 toType) external pure returns (uint256 result);
+    function teeSelect(uint256 control, uint256 ifTrue, uint256 ifFalse) external pure returns (uint256 result);
+
   `;
 }
 
@@ -153,20 +168,34 @@ export function tfheSol(
   operators: Operator[],
   supportedBits: number[],
   mocked: boolean,
+  isTeeOperation: boolean,
 ): [string, OverloadSignature[]] {
   const signatures: OverloadSignature[] = [];
   const res: string[] = [];
 
-  res.push(`// SPDX-License-Identifier: BSD-3-Clause-Clear
+  if (!isTeeOperation) {
+    res.push(`// SPDX-License-Identifier: BSD-3-Clause-Clear
 
-pragma solidity ^0.8.20;
+    pragma solidity ^0.8.20;
+    
+    ${commonSolLib()}
+    
+    import "./Impl.sol";
+    
+    library TFHE {
+    `);
+  } else {
+    res.push(`// SPDX-License-Identifier: BSD-3-Clause-Clear
 
-${commonSolLib()}
-
-import "./Impl.sol";
-
-library TFHE {
-`);
+    pragma solidity ^0.8.20;
+    
+    ${commonSolLib()}
+    
+    import "./TeeImpl.sol";
+    
+    library TEE {
+    `);
+  }
 
   supportedBits.forEach((b) => {
     res.push(`     euint${b} constant NIL${b} = euint${b}.wrap(0);
@@ -230,25 +259,30 @@ library TFHE {
     supportedBits.forEach((inputBits) => {
       res.push(tfheAsEboolCustomCast(inputBits, outputBits));
     });
-    res.push(tfheAsEboolUnaryCast(outputBits));
+    res.push(tfheAsEboolUnaryCast(outputBits, isTeeOperation));
   });
   supportedBits.forEach((bits) => res.push(tfheUnaryOperators(bits, operators, signatures)));
-  supportedBits.forEach((bits) => res.push(tfheCustomUnaryOperators(bits, signatures, mocked)));
+  supportedBits.forEach((bits) => res.push(tfheCustomUnaryOperators(bits, signatures, mocked, isTeeOperation)));
 
-  res.push(tfheCustomMethods(ctx, mocked));
+  res.push(tfheCustomMethods(ctx, mocked, isTeeOperation));
 
   res.push('}\n');
 
   supportedBits.forEach((bits) => {
     operators.forEach((op) => {
-      res.push(tfheSolidityOperator(bits, op, signatures));
+      res.push(tfheSolidityOperator(bits, op, signatures, isTeeOperation));
     });
   });
 
   return [res.join(''), signatures];
 }
 
-function tfheSolidityOperator(bits: number, operator: Operator, os: OverloadSignature[]): string {
+function tfheSolidityOperator(
+  bits: number,
+  operator: Operator,
+  os: OverloadSignature[],
+  isTeeOperation: boolean,
+): string {
   const res: string[] = [];
 
   if (operator.hasEncrypted && operator.binarySolidityOperator) {
@@ -257,11 +291,19 @@ function tfheSolidityOperator(bits: number, operator: Operator, os: OverloadSign
       using {${fname} as ${operator.binarySolidityOperator}} for euint${bits} global;
     `);
 
-    res.push(`
+    if (!isTeeOperation) {
+      res.push(`
       function ${fname}(euint${bits} lhs, euint${bits} rhs) pure returns (euint${bits}) {
         return TFHE.${operator.name}(lhs, rhs);
       }
     `);
+    } else {
+      res.push(`
+      function ${fname}(euint${bits} lhs, euint${bits} rhs) pure returns (euint${bits}) {
+        return TEE.${operator.name}(lhs, rhs);
+      }
+    `);
+    }
 
     // os.push({
     //   binaryOperator: operator.binarySolidityOperator,
@@ -281,11 +323,19 @@ function tfheSolidityOperator(bits: number, operator: Operator, os: OverloadSign
       using {${fname} as ${operator.unarySolidityOperator}} for euint${bits} global;
     `);
 
-    res.push(`
-      function ${fname}(euint${bits} input) pure returns (euint${bits}) {
-        return TFHE.${operator.name}(input);
-      }
-    `);
+    if (!isTeeOperation) {
+      res.push(`
+        function ${fname}(euint${bits} input) pure returns (euint${bits}) {
+          return TFHE.${operator.name}(input);
+        }
+      `);
+    } else {
+      res.push(`
+        function ${fname}(euint${bits} input) pure returns (euint${bits}) {
+          return TEE.${operator.name}(input);
+        }
+      `);
+    }
 
     // os.push({
     //   unaryOperator: operator.unarySolidityOperator,
@@ -547,7 +597,7 @@ function tfheAsEboolCustomCast(inputBits: number, outputBits: number): string {
     `;
 }
 
-function tfheAsEboolUnaryCast(bits: number): string {
+function tfheAsEboolUnaryCast(bits: number, isTeeOperation: boolean): string {
   const res: string[] = [];
   res.push(`
     // Cast an encrypted integer from euint${bits} to ebool.
@@ -556,58 +606,109 @@ function tfheAsEboolUnaryCast(bits: number): string {
     }
     `);
 
-  if (bits == 8) {
-    res.push(`
-    // Convert a serialized 'ciphertext' to an encrypted euint8 integer.
-    function asEbool(bytes memory ciphertext) internal pure returns (ebool) {
-        return ebool.wrap(Impl.verify(ciphertext, Common.ebool_t));
+  if (!isTeeOperation) {
+    if (bits == 8) {
+      res.push(`
+      // Convert a serialized 'ciphertext' to an encrypted euint8 integer.
+      function asEbool(bytes memory ciphertext) internal pure returns (ebool) {
+          return ebool.wrap(Impl.verify(ciphertext, Common.ebool_t));
+      }
+  
+      // Convert a plaintext value to an encrypted euint8 integer.
+      function asEbool(uint256 value) internal pure returns (ebool) {
+          return ebool.wrap(Impl.trivialEncrypt(value, Common.ebool_t));
+      }
+  
+      // Convert a plaintext boolean to an encrypted boolean.
+      function asEbool(bool value) internal pure returns (ebool) {
+          if (value) {
+              return asEbool(1);
+          } else {
+              return asEbool(0);
+          }
+      }
+  
+      // Converts an 'ebool' to an 'euint8'.
+      function asEuint8(ebool value) internal pure returns (euint8) {
+        return euint8.wrap(Impl.cast(ebool.unwrap(value), Common.euint8_t));
+      }
+  
+      // Evaluate and(a, b) and return the result.
+      function and(ebool a, ebool b) internal pure returns (ebool) {
+          return ebool.wrap(Impl.and(ebool.unwrap(a), ebool.unwrap(b)));
+      }
+  
+      // Evaluate or(a, b) and return the result.
+      function or(ebool a, ebool b) internal pure returns (ebool) {
+          return ebool.wrap(Impl.or(ebool.unwrap(a), ebool.unwrap(b)));
+      }
+  
+      // Evaluate xor(a, b) and return the result.
+      function xor(ebool a, ebool b) internal pure returns (ebool) {
+          return ebool.wrap(Impl.xor(ebool.unwrap(a), ebool.unwrap(b)));
+      }
+  
+      function not(ebool a) internal pure returns (ebool) {
+          return ebool.wrap(Impl.not(ebool.unwrap(a)));
+      }
+      `);
+    } else {
+      res.push(`
+      // Converts an 'ebool' to an 'euint${bits}'.
+      function asEuint${bits}(ebool b) internal pure returns (euint${bits}) {
+          return euint${bits}.wrap(Impl.cast(ebool.unwrap(b), Common.euint${bits}_t));
+      }
+      `);
     }
-
-    // Convert a plaintext value to an encrypted euint8 integer.
-    function asEbool(uint256 value) internal pure returns (ebool) {
-        return ebool.wrap(Impl.trivialEncrypt(value, Common.ebool_t));
-    }
-
-    // Convert a plaintext boolean to an encrypted boolean.
-    function asEbool(bool value) internal pure returns (ebool) {
-        if (value) {
-            return asEbool(1);
-        } else {
-            return asEbool(0);
-        }
-    }
-
-    // Converts an 'ebool' to an 'euint8'.
-    function asEuint8(ebool value) internal pure returns (euint8) {
-      return euint8.wrap(Impl.cast(ebool.unwrap(value), Common.euint8_t));
-    }
-
-    // Evaluate and(a, b) and return the result.
-    function and(ebool a, ebool b) internal pure returns (ebool) {
-        return ebool.wrap(Impl.and(ebool.unwrap(a), ebool.unwrap(b)));
-    }
-
-    // Evaluate or(a, b) and return the result.
-    function or(ebool a, ebool b) internal pure returns (ebool) {
-        return ebool.wrap(Impl.or(ebool.unwrap(a), ebool.unwrap(b)));
-    }
-
-    // Evaluate xor(a, b) and return the result.
-    function xor(ebool a, ebool b) internal pure returns (ebool) {
-        return ebool.wrap(Impl.xor(ebool.unwrap(a), ebool.unwrap(b)));
-    }
-
-    function not(ebool a) internal pure returns (ebool) {
-        return ebool.wrap(Impl.not(ebool.unwrap(a)));
-    }
-    `);
   } else {
-    res.push(`
-    // Converts an 'ebool' to an 'euint${bits}'.
-    function asEuint${bits}(ebool b) internal pure returns (euint${bits}) {
-        return euint${bits}.wrap(Impl.cast(ebool.unwrap(b), Common.euint${bits}_t));
+    if (bits == 8) {
+      res.push(`
+      // Convert a plaintext value to an encrypted euint8 integer.
+      function asEbool(uint256 value) internal pure returns (ebool) {
+          return ebool.wrap(Impl.trivialEncrypt(value, Common.ebool_t));
+      }
+  
+      // Convert a plaintext boolean to an encrypted boolean.
+      function asEbool(bool value) internal pure returns (ebool) {
+          if (value) {
+              return asEbool(1);
+          } else {
+              return asEbool(0);
+          }
+      }
+  
+      // Converts an 'ebool' to an 'euint8'.
+      function asEuint8(ebool value) internal pure returns (euint8) {
+        return euint8.wrap(Impl.cast(ebool.unwrap(value), Common.euint8_t));
+      }
+  
+      // Evaluate and(a, b) and return the result.
+      function and(ebool a, ebool b) internal pure returns (ebool) {
+          return ebool.wrap(Impl.and(ebool.unwrap(a), ebool.unwrap(b)));
+      }
+  
+      // Evaluate or(a, b) and return the result.
+      function or(ebool a, ebool b) internal pure returns (ebool) {
+          return ebool.wrap(Impl.or(ebool.unwrap(a), ebool.unwrap(b)));
+      }
+  
+      // Evaluate xor(a, b) and return the result.
+      function xor(ebool a, ebool b) internal pure returns (ebool) {
+          return ebool.wrap(Impl.xor(ebool.unwrap(a), ebool.unwrap(b)));
+      }
+  
+      function not(ebool a) internal pure returns (ebool) {
+          return ebool.wrap(Impl.not(ebool.unwrap(a)));
+      }
+      `);
+    } else {
+      res.push(`
+      // Converts an 'ebool' to an 'euint${bits}'.
+      function asEuint${bits}(ebool b) internal pure returns (euint${bits}) {
+          return euint${bits}.wrap(Impl.cast(ebool.unwrap(b), Common.euint${bits}_t));
+      }
+      `);
     }
-    `);
   }
 
   return res.join('');
@@ -635,7 +736,23 @@ function tfheUnaryOperators(bits: number, operators: Operator[], signatures: Ove
   return res.join('\n');
 }
 
-function tfheCustomUnaryOperators(bits: number, signatures: OverloadSignature[], mocked: boolean): string {
+function tfheCustomUnaryOperators(
+  bits: number,
+  signatures: OverloadSignature[],
+  mocked: boolean,
+  isTeeOperation: boolean,
+): string {
+  if (isTeeOperation) {
+    return `function asEuint${bits}(uint256 value) internal pure returns (euint${bits}) {
+      return euint${bits}.wrap(Impl.trivialEncrypt(value, Common.euint${bits}_t));
+    }
+
+    // Decrypts the encrypted 'value'.
+    function decrypt(euint${bits} value) internal view returns (${getUint(bits)}) {
+        return ${getUint(bits)}(Impl.decrypt(euint${bits}.unwrap(value)) % 2**${bits});
+    }`;
+  }
+
   let result = `
     // Convert a serialized 'ciphertext' to an encrypted euint${bits} integer.
     function asEuint${bits}(bytes memory ciphertext) internal pure returns (euint${bits}) {
@@ -704,8 +821,8 @@ function tfheCustomUnaryOperators(bits: number, signatures: OverloadSignature[],
   return result;
 }
 
-function unaryOperatorImpl(op: Operator): string {
-  let fname = operatorFheLibFunction(op);
+function unaryOperatorImpl(op: Operator, isTeeOperation: boolean): string {
+  let fname = operatorFheLibFunction(op, isTeeOperation);
   return `
     function ${op.name}(uint256 ct) internal pure returns (uint256 result) {
       result = FhevmLib(address(EXT_TFHE_LIBRARY)).${fname}(ct);
@@ -713,8 +830,9 @@ function unaryOperatorImpl(op: Operator): string {
   `;
 }
 
-function tfheCustomMethods(ctx: CodegenContext, mocked: boolean): string {
-  let result = `
+function tfheCustomMethods(ctx: CodegenContext, mocked: boolean, isTeeOperation: boolean): string {
+  if (!isTeeOperation) {
+    let result = `
     // Reencrypt the given 'value' under the given 'publicKey'.
     // Return a serialized euint8 value.
     function reencrypt(ebool value, bytes32 publicKey) internal view returns (bytes memory reencrypted) {
@@ -875,26 +993,119 @@ function tfheCustomMethods(ctx: CodegenContext, mocked: boolean): string {
         return eaddress.wrap(Impl.select(ebool.unwrap(control), eaddress.unwrap(a), eaddress.unwrap(b)));
     }
 `;
-  if (mocked) {
-    result += `
-    // Decrypts the encrypted 'value'.
-    function decrypt(ebool value) internal view returns (bool) {
-        return (Impl.decrypt(ebool.unwrap(value)) % 2 == 1);
+    if (mocked) {
+      result += `
+      // Decrypts the encrypted 'value'.
+      function decrypt(ebool value) internal view returns (bool) {
+          return (Impl.decrypt(ebool.unwrap(value)) % 2 == 1);
+      }
+      `;
+    } else {
+      result += `
+      // Decrypts the encrypted 'value'.
+      function decrypt(ebool value) internal view returns (bool) {
+          return (Impl.decrypt(ebool.unwrap(value)) != 0);
+      }
+      `;
     }
-    `;
+    return result;
   } else {
-    result += `
-    // Decrypts the encrypted 'value'.
-    function decrypt(ebool value) internal view returns (bool) {
-        return (Impl.decrypt(ebool.unwrap(value)) != 0);
+    let result = `
+    // Convert a plaintext value to an encrypted asEaddress.
+    function asEaddress(address value) internal pure returns (eaddress) {
+        return eaddress.wrap(Impl.trivialEncrypt(uint160(value), Common.euint160_t));
+    }
+
+    // Return true if the enrypted integer is initialized and false otherwise.
+    function isInitialized(eaddress v) internal pure returns (bool) {
+        return eaddress.unwrap(v) != 0;
+    }
+
+    // Evaluate eq(a, b) and return the result.
+    function eq(eaddress a, eaddress b) internal pure returns (ebool) {
+        if (!isInitialized(a)) {
+            a = asEaddress(address(0));
+        }
+        if (!isInitialized(b)) {
+            b = asEaddress(address(0));
+        }
+        return ebool.wrap(Impl.eq(eaddress.unwrap(a), eaddress.unwrap(b), false));
+    }
+
+    // Evaluate ne(a, b) and return the result.
+    function ne(eaddress a, eaddress b) internal pure returns (ebool) {
+        if (!isInitialized(a)) {
+            a = asEaddress(address(0));
+        }
+        if (!isInitialized(b)) {
+            b = asEaddress(address(0));
+        }
+        return ebool.wrap(Impl.ne(eaddress.unwrap(a), eaddress.unwrap(b), false));
+    }
+
+    // Evaluate eq(a, b) and return the result.
+    function eq(eaddress a, address b) internal pure returns (ebool) {
+        if (!isInitialized(a)) {
+            a = asEaddress(address(0));
+        }
+        uint256 bProc = uint256(uint160(b));
+        return ebool.wrap(Impl.eq(eaddress.unwrap(a), bProc, true));
+    }
+
+    // Evaluate eq(a, b) and return the result.
+    function eq(address b, eaddress a) internal pure returns (ebool) {
+        if (!isInitialized(a)) {
+            a = asEaddress(address(0));
+        }
+        uint256 bProc = uint256(uint160(b));
+        return ebool.wrap(Impl.eq(eaddress.unwrap(a), bProc, true));
+    }
+
+    // Evaluate ne(a, b) and return the result.
+    function ne(eaddress a, address b) internal pure returns (ebool) {
+        if (!isInitialized(a)) {
+            a = asEaddress(address(0));
+        }
+        uint256 bProc = uint256(uint160(b));
+        return ebool.wrap(Impl.ne(eaddress.unwrap(a), bProc, true));
+    }
+
+    // Evaluate ne(a, b) and return the result.
+    function ne(address b, eaddress a) internal pure returns (ebool) {
+        if (!isInitialized(a)) {
+            a = asEaddress(address(0));
+        }
+        uint256 bProc = uint256(uint160(b));
+        return ebool.wrap(Impl.ne(eaddress.unwrap(a), bProc, true));
+    }
+    
+    function select(ebool control, eaddress a, eaddress b) internal pure returns (eaddress) {
+        return eaddress.wrap(Impl.select(ebool.unwrap(control), eaddress.unwrap(a), eaddress.unwrap(b)));
     }
     `;
+
+    if (mocked) {
+      result += `
+      // Decrypts the encrypted 'value'.
+      function decrypt(ebool value) internal view returns (bool) {
+          return (Impl.decrypt(ebool.unwrap(value)) % 2 == 1);
+      }
+      `;
+    } else {
+      result += `
+      // Decrypts the encrypted 'value'.
+      function decrypt(ebool value) internal view returns (bool) {
+          return (Impl.decrypt(ebool.unwrap(value)) != 0);
+      }
+      `;
+    }
+    return result;
   }
-  return result;
 }
 
-function implCustomMethods(ctx: CodegenContext): string {
-  return `
+function implCustomMethods(ctx: CodegenContext, isTeeOperation: boolean): string {
+  if (!isTeeOperation) {
+    return `
     // If 'control's value is 'true', the result has the same value as 'ifTrue'.
     // If 'control's value is 'false', the result has the same value as 'ifFalse'.
     function select(uint256 control, uint256 ifTrue, uint256 ifFalse) internal pure returns (uint256 result) {
@@ -944,18 +1155,52 @@ function implCustomMethods(ctx: CodegenContext): string {
       result = FhevmLib(address(EXT_TFHE_LIBRARY)).fheRandBounded(upperBound, bytes1(randType));
     }
     `;
+  } else {
+    return `
+      function cast(
+        uint256 ciphertext,
+        uint8 toType
+      ) internal pure returns (uint256 result) {
+          result = FhevmLib(address(EXT_TFHE_LIBRARY)).teeCast(ciphertext, bytes1(toType));
+      }
+
+      function decrypt(uint256 ciphertext) internal view returns(uint256 result) {
+        result = FhevmLib(address(EXT_TFHE_LIBRARY)).teeDecrypt(ciphertext);
+      }
+
+      function trivialEncrypt(
+        uint256 value,
+        uint8 toType
+      ) internal pure returns (uint256 result) {
+          result = FhevmLib(address(EXT_TFHE_LIBRARY)).teeEncrypt(value, bytes1(toType));
+      }
+
+      function select(uint256 control, uint256 ifTrue, uint256 ifFalse) internal pure returns (uint256 result) {
+        result = FhevmLib(address(EXT_TFHE_LIBRARY)).teeSelect(control, ifTrue, ifFalse);
+    }
+    `;
+  }
 }
 
-export function implSolMock(ctx: CodegenContext, operators: Operator[]): string {
+export function implSolMock(ctx: CodegenContext, operators: Operator[], isTeeOperation: boolean): string {
   const res: string[] = [];
 
-  res.push(`
-// SPDX-License-Identifier: BSD-3-Clause-Clear
+  let result = ``;
+  if (!isTeeOperation) {
+    result += `// SPDX-License-Identifier: BSD-3-Clause-Clear
 
-pragma solidity ^0.8.20;
+    pragma solidity ^0.8.20;
+    
+    import "./TFHE.sol";`;
+  } else {
+    result += `// SPDX-License-Identifier: BSD-3-Clause-Clear
 
-import "./TFHE.sol";
+    pragma solidity ^0.8.20;
+    
+    import "./TEE.sol";`;
+  }
 
+  result += `
 library Impl {
   function add(uint256 lhs, uint256 rhs, bool /*scalar*/) internal pure returns (uint256 result) {
     unchecked {
@@ -1158,7 +1403,9 @@ library Impl {
     // much as this is a mock).
     result = rand(randType) % upperBound;
   }
-`);
+`;
+
+  res.push(result);
 
   res.push('}\n');
 

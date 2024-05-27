@@ -192,18 +192,28 @@ function ensureNumberInRange(bits: number, input: number | bigint, min: number, 
   assert(input >= min && input <= max, `${bits} bit number ${input} doesn't fall into expected [${min}; ${max}] range`);
 }
 
-export function generateSmartContract(os: OverloadShard): string {
+export function generateSmartContract(os: OverloadShard, isTeeOperation: boolean): string {
   const res: string[] = [];
 
-  res.push(`
-        // SPDX-License-Identifier: BSD-3-Clause-Clear
-        pragma solidity ^0.8.20;
+  if (!isTeeOperation) {
+    res.push(`
+          // SPDX-License-Identifier: BSD-3-Clause-Clear
+          pragma solidity ^0.8.20;
 
-        import "../../lib/TFHE.sol";
-        contract TFHETestSuite${os.shardNumber} {
-    `);
+          import "../../lib/TFHE.sol";
+          contract TFHETestSuite${os.shardNumber} {
+      `);
+  } else {
+    res.push(`
+          // SPDX-License-Identifier: BSD-3-Clause-Clear
+          pragma solidity ^0.8.20;
 
-  generateLibCallTest(os, res);
+          import "../../lib/TEE.sol";
+          contract TEETestSuite${os.shardNumber} {
+      `);
+  }
+
+  generateLibCallTest(os, res, isTeeOperation);
 
   res.push(`
         }
@@ -212,7 +222,7 @@ export function generateSmartContract(os: OverloadShard): string {
   return res.join('');
 }
 
-function generateLibCallTest(os: OverloadShard, res: string[]) {
+function generateLibCallTest(os: OverloadShard, res: string[], isTeeOperation: boolean) {
   os.overloads.forEach((o) => {
     const methodName = signatureContractMethodName(o);
     const args = signatureContractArguments(o);
@@ -226,7 +236,7 @@ function generateLibCallTest(os: OverloadShard, res: string[]) {
       const arg = String.fromCharCode(argName);
       const argProc = `${arg}Proc`;
       procArgs.push(argProc);
-      res.push(`${functionTypeToString(a)} ${argProc} = ${castExpressionToType(arg, a)};`);
+      res.push(`${functionTypeToString(a)} ${argProc} = ${castExpressionToType(arg, a, isTeeOperation)};`);
       res.push('\n');
       argName++;
     });
@@ -242,13 +252,23 @@ function generateLibCallTest(os: OverloadShard, res: string[]) {
       res.push(`${functionTypeToEncryptedType(o.returnType)} result = ${o.unaryOperator}aProc;`);
       res.push('\n');
     } else {
-      res.push(`${functionTypeToEncryptedType(o.returnType)} result = TFHE.${o.name}(${tfheArgs});`);
+      if (!isTeeOperation) {
+        res.push(`${functionTypeToEncryptedType(o.returnType)} result = TFHE.${o.name}(${tfheArgs});`);
+      } else {
+        res.push(`${functionTypeToEncryptedType(o.returnType)} result = TEE.${o.name}(${tfheArgs});`);
+      }
       res.push('\n');
     }
 
-    res.push(`return TFHE.decrypt(result);
-        }
-    `);
+    if (!isTeeOperation) {
+      res.push(`return TFHE.decrypt(result);
+          }
+      `);
+    } else {
+      res.push(`return TEE.decrypt(result);
+          }
+      `);
+    }
   });
 }
 
@@ -286,14 +306,25 @@ function signatureContractEncryptedSignature(s: OverloadSignature): string {
   return `(${joined}) => ${functionTypeToEncryptedType(s.returnType)}`;
 }
 
-function castExpressionToType(argExpr: string, outputType: FunctionType): string {
-  switch (outputType.type) {
-    case ArgumentType.EUint:
-      return `TFHE.asEuint${outputType.bits}(${argExpr})`;
-    case ArgumentType.Uint:
-      return argExpr;
-    case ArgumentType.Ebool:
-      return `TFHE.asEbool(${argExpr})`;
+function castExpressionToType(argExpr: string, outputType: FunctionType, isTeeOperation: boolean): string {
+  if (!isTeeOperation) {
+    switch (outputType.type) {
+      case ArgumentType.EUint:
+        return `TFHE.asEuint${outputType.bits}(${argExpr})`;
+      case ArgumentType.Uint:
+        return argExpr;
+      case ArgumentType.Ebool:
+        return `TFHE.asEbool(${argExpr})`;
+    }
+  } else {
+    switch (outputType.type) {
+      case ArgumentType.EUint:
+        return `TEE.asEuint${outputType.bits}(${argExpr})`;
+      case ArgumentType.Uint:
+        return argExpr;
+      case ArgumentType.Ebool:
+        return `TEE.asEbool(${argExpr})`;
+    }
   }
 }
 
