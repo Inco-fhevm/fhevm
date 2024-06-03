@@ -19,17 +19,27 @@ let signers: Signers;
 
 const keys: (keyof Signers)[] = ['alice', 'bob', 'carol', 'dave', 'eve'];
 
-const getCoin = async (address: string) => {
+const getCoin = async (address: string, isIncoNetwork: boolean) => {
   const containerName = process.env['TEST_CONTAINER_NAME'] || 'fhevm';
-  const response = await exec(`docker exec -i ${containerName} faucet ${address} | grep height`);
+
+  let cmd: string;
+  if (isIncoNetwork) {
+    const addressWithoutPrefix = address.startsWith('0x') ? address.substring(2) : address;
+    cmd = `python3 ./test/faucet.py ${addressWithoutPrefix}`;
+  } else {
+    cmd = `docker exec -i ${containerName} faucet ${address} | grep height`;
+  }
+
+  const response = await exec(cmd);
   const res = JSON.parse(response.stdout);
-  if (res.raw_log.match('account sequence mismatch')) await getCoin(address);
+
+  if (res.raw_log.match('account sequence mismatch')) await getCoin(address, isIncoNetwork);
 };
 
-const faucet = async (address: string) => {
+const faucet = async (address: string, isIncoNetwork: boolean) => {
   const balance = await ethers.provider.getBalance(address);
   if (balance > 0) return;
-  await getCoin(address);
+  await getCoin(address, isIncoNetwork);
   await waitForBalance(address);
 };
 
@@ -57,11 +67,16 @@ export const initSigners = async (quantity: number): Promise<void> => {
       throw new Error("Can't run parallel mode if network is not 'local'");
     }
 
-    if (config.defaultNetwork === 'local') {
+    let isTee: boolean = false;
+    if (config.defaultNetwork === 'inco') {
+      isTee = true;
+    }
+
+    if (config.defaultNetwork === 'local' || config.defaultNetwork === 'inco') {
       const faucetP: Promise<void>[] = [];
       for (let i = 0; i < q; i += 1) {
         const account = signers[keys[i]];
-        faucetP.push(faucet(account.address));
+        faucetP.push(faucet(account.address, isTee));
       }
       await Promise.all(faucetP);
     }

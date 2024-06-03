@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+
 type Test = {
   inputs: bigint[];
   output: number | boolean | bigint;
@@ -125,7 +128,7 @@ export const SUPPORTED_FUNCTIONS: SupportedFunctions = {
   shl: {
     supportedBits: SUPPORTED_BITS,
     limit: 'bits',
-    evalTest: (lhsNumber, rhsNumber, lhs, rhs) => {
+    evalTest: (lhsNumber, rhsNumber, lhs, _) => {
       const bits = `${new Array(256).fill('0').join('')}${lhsNumber.toString(2)}`.slice(-lhs).split('');
       const r = bits.map((_, index) => {
         const newIndex = Number(BigInt(index) + (rhsNumber % BigInt(lhs)));
@@ -137,7 +140,7 @@ export const SUPPORTED_FUNCTIONS: SupportedFunctions = {
   shr: {
     supportedBits: SUPPORTED_BITS,
     limit: 'bits',
-    evalTest: (lhsNumber, rhsNumber, lhs, rhs) => {
+    evalTest: (lhsNumber, rhsNumber, lhs, _) => {
       const bits = `${new Array(256).fill('0').join('')}${lhsNumber.toString(2)}`.slice(-lhs).split('');
       const r = bits.map((_, index) => {
         const newIndex = Number(BigInt(index) - (rhsNumber % BigInt(lhs)));
@@ -149,7 +152,7 @@ export const SUPPORTED_FUNCTIONS: SupportedFunctions = {
   rotl: {
     supportedBits: SUPPORTED_BITS,
     limit: 'bits',
-    evalTest: (lhsNumber, rhsNumber, lhs, rhs) => {
+    evalTest: (lhsNumber, rhsNumber, lhs, _) => {
       const bits = `${new Array(256).fill('0').join('')}${lhsNumber.toString(2)}`.slice(-lhs).split('');
       const r = bits.map((_, index) => {
         let newIndex = Number(BigInt(index) + (rhsNumber % BigInt(lhs)));
@@ -162,7 +165,7 @@ export const SUPPORTED_FUNCTIONS: SupportedFunctions = {
   rotr: {
     supportedBits: SUPPORTED_BITS,
     limit: 'bits',
-    evalTest: (lhsNumber, rhsNumber, lhs, rhs) => {
+    evalTest: (lhsNumber, rhsNumber, lhs, _) => {
       const bits = `${new Array(256).fill('0').join('')}${lhsNumber.toString(2)}`.slice(-lhs).split('');
       const r = bits.map((_, index) => {
         let newIndex = Number(BigInt(index) - (rhsNumber % BigInt(lhs)));
@@ -236,7 +239,7 @@ export const generateTests = () => {
     const test = SUPPORTED_FUNCTIONS[functionName];
     test.supportedBits.forEach((lhs: number) => {
       if (test.unary) {
-        let lhsNumber = generateNumber(lhs);
+        const lhsNumber = generateNumber(lhs);
         const encryptedTestName = [functionName, `euint${lhs}`].join('_');
         const encryptedTests: Test[] = [];
         encryptedTests.push({
@@ -304,8 +307,5 @@ export const generateTests = () => {
 };
 
 const tests = generateTests();
-
-const fs = require('fs');
-const path = require('path');
 
 fs.writeFileSync(`${path.resolve(__dirname)}/overloads.json`, JSON.stringify(tests));

@@ -87,12 +87,16 @@ const chainIds = {
   zama: 8009,
   local: 9000,
   localNetwork1: 9000,
+  inco: 9090,
   multipleValidatorTestnet: 8009,
 };
 
 function getChainConfig(chain: keyof typeof chainIds): NetworkUserConfig {
   let jsonRpcUrl: string;
   switch (chain) {
+    case 'inco':
+      jsonRpcUrl = 'http://localhost:8545';
+      break;
     case 'local':
       jsonRpcUrl = 'http://localhost:8545';
       break;
@@ -154,7 +158,7 @@ task('test', async (taskArgs, hre, runSuper) => {
 
 const config: HardhatUserConfig = {
   preprocess: {
-    eachLine: (hre) => ({
+    eachLine: (_) => ({
       transform: (line: string) => {
         if (network === 'hardhat') {
           // checks if HARDHAT_NETWORK env variable is set to "hardhat" to use the remapping for the mocked version of TFHE.sol
@@ -198,6 +202,7 @@ const config: HardhatUserConfig = {
     local: getChainConfig('local'),
     localNetwork1: getChainConfig('localNetwork1'),
     multipleValidatorTestnet: getChainConfig('multipleValidatorTestnet'),
+    inco: getChainConfig('inco'),
   },
   paths: {
     artifacts: './artifacts',

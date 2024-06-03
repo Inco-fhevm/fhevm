@@ -27,6 +27,7 @@ export type Operator = {
 
 export type CodegenContext = {
   libFheAddress: string;
+  libTeeAddress: string;
 };
 
 export enum OperatorArguments {
@@ -266,10 +267,12 @@ export function networkCodegenContext(network: Network): CodegenContext {
     case Network.Evmos:
       return {
         libFheAddress: '0x000000000000000000000000000000000000005d',
+        libTeeAddress: '0x000000000000000000000000000000000000005E',
       };
     case Network.Network1:
       return {
         libFheAddress: '0x010000000000000000000000000000000000005D',
+        libTeeAddress: '0x000000000000000000000000000000000000005E',
       };
   }
 }

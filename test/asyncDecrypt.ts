@@ -41,14 +41,14 @@ export const asyncDecrypt = async (): Promise<void> => {
   firstBlockListening = await ethers.provider.getBlockNumber();
   // this function will emit logs for every request and fulfilment of a decryption
   oracle = await ethers.getContractAt('OraclePredeploy', parsedEnv.ORACLE_CONTRACT_PREDEPLOY_ADDRESS);
-  oracle.on(
+  await oracle.on(
     'EventDecryption',
     async (requestID, cts, contractCaller, callbackSelector, msgValue, maxTimestamp, eventData) => {
       const blockNumber = eventData.log.blockNumber;
       console.log(`${await currentTime()} - Requested decrypt on block ${blockNumber} (requestID ${requestID})`);
     },
   );
-  oracle.on('ResultCallback', async (requestID, success, result, eventData) => {
+  await oracle.on('ResultCallback', async (requestID, success, result, eventData) => {
     const blockNumber = eventData.log.blockNumber;
     console.log(`${await currentTime()} - Fulfilled decrypt on block ${blockNumber} (requestID ${requestID})`);
   });

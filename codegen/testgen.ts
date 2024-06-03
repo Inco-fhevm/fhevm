@@ -35,8 +35,8 @@ export function splitOverloadsToShards(overloads: OverloadSignature[]): Overload
   const MAX_SHARD_SIZE = 100;
   const res: OverloadShard[] = [];
 
-  var shardNo = 1;
-  var accumulator: OverloadSignature[] = [];
+  let shardNo = 1;
+  let accumulator: OverloadSignature[] = [];
   overloads.forEach((o) => {
     accumulator.push(o);
     if (accumulator.length >= MAX_SHARD_SIZE) {
@@ -59,8 +59,9 @@ export function splitOverloadsToShards(overloads: OverloadSignature[]): Overload
   return res;
 }
 
-export function generateTestCode(shards: OverloadShard[]): string {
+export function generateTestCode(shards: OverloadShard[], isTeeOperation: boolean): string {
   const res: string[] = [];
+  const libName = isTeeOperation ? 'TEE' : 'TFHE';
 
   res.push(`
     import { expect } from 'chai';
@@ -72,17 +73,17 @@ export function generateTestCode(shards: OverloadShard[]): string {
 
   shards.forEach((os) => {
     res.push(`
-    import type { TFHETestSuite${os.shardNumber} } from '../../types/contracts/tests/TFHETestSuite${os.shardNumber}';
+    import type { ${libName}TestSuite${os.shardNumber} } from '../../types/contracts/tests/${libName}TestSuite${os.shardNumber}';
     `);
   });
 
   shards.forEach((os) => {
     res.push(`
-async function deployTfheTestFixture${os.shardNumber}(): Promise<TFHETestSuite${os.shardNumber}> {
+async function deployTfheTestFixture${os.shardNumber}(): Promise<${libName}TestSuite${os.shardNumber}> {
   const signers = await getSigners();
   const admin = signers.alice;
 
-  const contractFactory = await ethers.getContractFactory('TFHETestSuite${os.shardNumber}');
+  const contractFactory = await ethers.getContractFactory('${libName}TestSuite${os.shardNumber}');
   const contract = await contractFactory.connect(admin).deploy();
   await contract.waitForDeployment();
 
@@ -92,7 +93,7 @@ async function deployTfheTestFixture${os.shardNumber}(): Promise<TFHETestSuite${
   });
 
   res.push(`
-    describe('TFHE operations', function () {
+    describe('${libName} operations', function () {
         before(async function () {
             await initSigners(1);
             this.signers = await getSigners();
@@ -104,9 +105,12 @@ async function deployTfheTestFixture${os.shardNumber}(): Promise<TFHETestSuite${
             const contract${os.shardNumber} = await deployTfheTestFixture${os.shardNumber}();
             this.contract${os.shardNumber}Address = await contract${os.shardNumber}.getAddress();
             this.contract${os.shardNumber} = contract${os.shardNumber};
-            const instances${os.shardNumber} = await createInstances(this.contract${os.shardNumber}Address, ethers, this.signers);
-            this.instances${os.shardNumber} = instances${os.shardNumber};
     `);
+    if (!isTeeOperation) {
+      res.push(`const instances${os.shardNumber} = await createInstances(this.contract${os.shardNumber}Address, ethers, this.signers);
+        this.instances${os.shardNumber} = instances${os.shardNumber};
+      `);
+    }
   });
 
   res.push(`
@@ -122,7 +126,7 @@ async function deployTfheTestFixture${os.shardNumber}(): Promise<TFHETestSuite${
       overloadUsages[methodName] = true;
       const tests = overloadTests[methodName] || [];
       assert(tests.length > 0, `Overload ${methodName} has no tests, please add them.`);
-      var testIndex = 1;
+      let testIndex = 1;
       tests.forEach((t) => {
         assert(
           t.inputs.length == o.arguments.length,
@@ -133,15 +137,25 @@ async function deployTfheTestFixture${os.shardNumber}(): Promise<TFHETestSuite${
           ensureNumberAcceptableInBitRange(o.returnType.bits, t.output);
         }
         const testArgs = t.inputs.join(', ');
-        const testArgsEncrypted = t.inputs
-          .map((v, index) => {
-            if (o.arguments[index].type == ArgumentType.EUint) {
-              return `this.instances${os.shardNumber}.alice.encrypt${o.arguments[index].bits}(${v}n)`;
-            } else {
+        let testArgsEncrypted: string;
+        if (isTeeOperation) {
+          testArgsEncrypted = t.inputs
+            .map((v) => {
               return `${v}n`;
-            }
-          })
-          .join(', ');
+            })
+            .join(', ');
+        } else {
+          testArgsEncrypted = t.inputs
+            .map((v, index) => {
+              if (o.arguments[index].type == ArgumentType.EUint) {
+                return `this.instances${os.shardNumber}.alice.encrypt${o.arguments[index].bits}(${v}n)`;
+              } else {
+                return `${v}n`;
+              }
+            })
+            .join(', ');
+        }
+
         let output = t.output.toString();
         if (typeof t.output === 'bigint') output += 'n';
         res.push(`
@@ -155,7 +169,7 @@ async function deployTfheTestFixture${os.shardNumber}(): Promise<TFHETestSuite${
     });
   });
 
-  for (let key in overloadTests) {
+  for (const key in overloadTests) {
     assert(overloadUsages[key], `No such overload '${key}' exists for which test data is defined`);
   }
 
@@ -224,14 +238,15 @@ export function generateSmartContract(os: OverloadShard, isTeeOperation: boolean
 
 function generateLibCallTest(os: OverloadShard, res: string[], isTeeOperation: boolean) {
   os.overloads.forEach((o) => {
+    const libName = isTeeOperation ? 'TEE' : 'TFHE';
     const methodName = signatureContractMethodName(o);
-    const args = signatureContractArguments(o);
+    const args = signatureContractArguments(o, isTeeOperation);
     const retType = functionTypeToDecryptedType(o.returnType);
     res.push(`function ${methodName}(${args}) public view returns (${retType}) {`);
     res.push('\n');
 
     const procArgs: string[] = [];
-    var argName = 97; // letter 'a' in ascii
+    let argName = 97; // letter 'a' in ascii
     o.arguments.forEach((a) => {
       const arg = String.fromCharCode(argName);
       const argProc = `${arg}Proc`;
@@ -252,23 +267,13 @@ function generateLibCallTest(os: OverloadShard, res: string[], isTeeOperation: b
       res.push(`${functionTypeToEncryptedType(o.returnType)} result = ${o.unaryOperator}aProc;`);
       res.push('\n');
     } else {
-      if (!isTeeOperation) {
-        res.push(`${functionTypeToEncryptedType(o.returnType)} result = TFHE.${o.name}(${tfheArgs});`);
-      } else {
-        res.push(`${functionTypeToEncryptedType(o.returnType)} result = TEE.${o.name}(${tfheArgs});`);
-      }
+      res.push(`${functionTypeToEncryptedType(o.returnType)} result = ${libName}.${o.name}(${tfheArgs});`);
       res.push('\n');
     }
 
-    if (!isTeeOperation) {
-      res.push(`return TFHE.decrypt(result);
-          }
-      `);
-    } else {
-      res.push(`return TEE.decrypt(result);
-          }
-      `);
-    }
+    res.push(`return ${libName}.decrypt(result);
+        }
+    `);
   });
 }
 
@@ -281,12 +286,12 @@ export function signatureContractMethodName(s: OverloadSignature): string {
   return res.join('_');
 }
 
-function signatureContractArguments(s: OverloadSignature): string {
+function signatureContractArguments(s: OverloadSignature, isTeeOperation: boolean): string {
   const res: string[] = [];
 
-  var argName = 97; // letter 'a' in ascii
+  let argName = 97; // letter 'a' in ascii
   s.arguments.forEach((a) => {
-    res.push(`${functionTypeToCalldataType(a)} ${String.fromCharCode(argName)}`);
+    res.push(`${functionTypeToCalldataType(a, isTeeOperation)} ${String.fromCharCode(argName)}`);
     argName++;
   });
 
@@ -296,10 +301,10 @@ function signatureContractArguments(s: OverloadSignature): string {
 function signatureContractEncryptedSignature(s: OverloadSignature): string {
   const res: string[] = [];
 
-  var argName = 97; // letter 'a' in ascii
+  // let argName = 97; // letter 'a' in ascii
   s.arguments.forEach((a) => {
     res.push(`${functionTypeToString(a)}`);
-    argName++;
+    // argName++;
   });
 
   const joined = res.join(', ');
@@ -307,31 +312,21 @@ function signatureContractEncryptedSignature(s: OverloadSignature): string {
 }
 
 function castExpressionToType(argExpr: string, outputType: FunctionType, isTeeOperation: boolean): string {
-  if (!isTeeOperation) {
-    switch (outputType.type) {
-      case ArgumentType.EUint:
-        return `TFHE.asEuint${outputType.bits}(${argExpr})`;
-      case ArgumentType.Uint:
-        return argExpr;
-      case ArgumentType.Ebool:
-        return `TFHE.asEbool(${argExpr})`;
-    }
-  } else {
-    switch (outputType.type) {
-      case ArgumentType.EUint:
-        return `TEE.asEuint${outputType.bits}(${argExpr})`;
-      case ArgumentType.Uint:
-        return argExpr;
-      case ArgumentType.Ebool:
-        return `TEE.asEbool(${argExpr})`;
-    }
+  const libName = isTeeOperation ? 'TEE' : 'TFHE';
+  switch (outputType.type) {
+    case ArgumentType.EUint:
+      return `${libName}.asEuint${outputType.bits}(${argExpr})`;
+    case ArgumentType.Uint:
+      return argExpr;
+    case ArgumentType.Ebool:
+      return `TFHE.asEbool(${argExpr})`;
   }
 }
 
-function functionTypeToCalldataType(t: FunctionType): string {
+function functionTypeToCalldataType(t: FunctionType, isTeeOperation: boolean): string {
   switch (t.type) {
     case ArgumentType.EUint:
-      return `bytes calldata`;
+      return isTeeOperation ? getUint(t.bits) : `bytes calldata`;
     case ArgumentType.Uint:
       return getUint(t.bits);
     case ArgumentType.Ebool:
