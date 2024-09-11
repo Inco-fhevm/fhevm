@@ -88,6 +88,7 @@ const chainIds = {
   local: 9000,
   localNetwork1: 9000,
   multipleValidatorTestnet: 8009,
+  rivest: 9000,
 };
 
 function getChainConfig(chain: keyof typeof chainIds): NetworkUserConfig {
@@ -104,6 +105,9 @@ function getChainConfig(chain: keyof typeof chainIds): NetworkUserConfig {
       break;
     case 'zama':
       jsonRpcUrl = 'https://devnet.zama.ai';
+      break;
+    case 'rivest':
+      jsonRpcUrl = 'https://rivest-validator-1_primary.inco.org';
       break;
   }
   return {
@@ -198,6 +202,7 @@ const config: HardhatUserConfig = {
     local: getChainConfig('local'),
     localNetwork1: getChainConfig('localNetwork1'),
     multipleValidatorTestnet: getChainConfig('multipleValidatorTestnet'),
+    rivest: getChainConfig('rivest'),
   },
   paths: {
     artifacts: './artifacts',
