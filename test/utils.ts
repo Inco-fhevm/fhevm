@@ -1,12 +1,13 @@
+import { toBufferLE } from 'bigint-buffer';
 import { ContractMethodArgs, Typed } from 'ethers';
-import { ethers } from 'hardhat';
+import { ethers, network } from 'hardhat';
 
 import type { Counter } from '../types';
 import { TypedContractMethod } from '../types/common';
 import { getSigners } from './signers';
 
 export const waitForBlock = (blockNumber: bigint | number) => {
-  if (process.env.HARDHAT_NETWORK === 'hardhat') {
+  if (network.name === 'hardhat') {
     return new Promise((resolve, reject) => {
       const intervalId = setInterval(async () => {
         try {
@@ -38,7 +39,7 @@ export const waitForBlock = (blockNumber: bigint | number) => {
 
 export const waitNBlocks = async (Nblocks: number) => {
   const currentBlock = await ethers.provider.getBlockNumber();
-  if (process.env.HARDHAT_NETWORK === 'hardhat') {
+  if (network.name === 'hardhat') {
     await produceDummyTransactions(Nblocks);
   }
   await waitForBlock(currentBlock + Nblocks);
@@ -95,4 +96,9 @@ export const mineNBlocks = async (n: number) => {
   for (let index = 0; index < n; index++) {
     await ethers.provider.send('evm_mine');
   }
+};
+
+export const bigIntToBytes = (value: bigint) => {
+  const byteArrayLength = Math.ceil(value.toString(2).length / 8);
+  return new Uint8Array(toBufferLE(value, byteArrayLength));
 };

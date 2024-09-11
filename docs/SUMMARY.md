@@ -5,33 +5,37 @@
 ## Getting Started
 
 - [What is fhEVM](getting_started/overview.md)
-- [Connecting to Zama Devnet](getting_started/connect.md)
-- [Using Zama Faucet](getting_started/faucet.md)
-- [Local dev node](getting_started/local.md)
+- Write contract
+  - [Using Hardhat](getting_started/write_contract/hardhat.md)
+  - [Using Remix](getting_started/write_contract/remix.md)
+  - [Other development environment](getting_started/write_contract/others.md)
+  - [Installing packages](getting_started/write_contract/installation.md)
+- [Deploy on fhEVM native](getting_started/devnet.md)
+- [Deploy on Ethereum](getting_started/ethereum.md)
 - [Whitepaper](https://github.com/zama-ai/fhevm/blob/main/fhevm-whitepaper.pdf)
 
 ## Fundamentals
 
-- [Write contract](fundamentals/write_contract/README.md)
-  - [Using Hardhat](fundamentals/write_contract/hardhat.md)
-  - [Using Remix](fundamentals/write_contract/remix.md)
-  - [Other development environment](fundamentals/write_contract/others.md)
-- [Use encrypted types](fundamentals/types.md)
-- [Operations on encrypted types](fundamentals/operations.md)
-- [Branching in FHE](fundamentals/conditions.md)
+- Encrypted types
+  - [Supported types](fundamentals/types/README.md)
+  - [Operations on encrypted types](fundamentals/types/operations.md)
+  - [Branching in FHE](fundamentals/types/conditions.md)
+  - [Generate random number](fundamentals/types/random.md)
+- [Encrypted inputs](fundamentals/inputs.md)
+- [Access Control List](fundamentals/acl.md)
 - [Decrypt and reencrypt](fundamentals/decrypt.md)
-- [Generate random number](fundamentals/random.md)
 - [Contracts standard library](fundamentals/contracts.md)
 
 ## Guides
 
-- [Gas estimation](guides/gas.md)
-- [Common pitfalls and best practises](guides/pitfalls.md)
-- [How can I break a loop ?](guides/loop.md)
-- [Encrypt an input](guides/inputs.md)
-- [Use the CLI](guides/cli.md)
+- [Decryption](guides/decrypt.md)
+- [Reencryption](guides/reencryption.md)
 - [Build a web application](guides/webapp.md)
 - [Build with Node](guides/node.md)
+- [Common pitfalls and best practises](guides/pitfalls.md)
+- [How can I break a loop ?](guides/loop.md)
+- [Gas estimation on devnet](guides/gas.md)
+- [Use the CLI](guides/cli.md)
 - [Common webpack errors](guides/webpack.md)
 
 ## Tutorials
@@ -41,7 +45,8 @@
 
 ## References
 
-- [API Function specifications](references/functions.md)
+- [API function specifications](references/functions.md)
+- [fhevmjs function specifications](references/fhevmjs.md)
 - [Repositories](references/repositories.md)
 
 ## Developer

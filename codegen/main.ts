@@ -1,10 +1,13 @@
 import { mkdirSync, writeFileSync } from 'fs';
 
 import { ALL_OPERATORS, Network, SUPPORTED_BITS, checks, networkCodegenContext } from './common';
+import operatorsPrices from './operatorsPrices.json';
+import { generateFHEPayment } from './payments';
 import * as t from './templates';
 import * as testgen from './testgen';
 
 function generateAllFiles() {
+  const numSplits = 12;
   const operators = checks(ALL_OPERATORS);
 
   const network = Network[(process.env.TARGET_NETWORK as keyof typeof Network) || 'Evmos'];
@@ -13,14 +16,15 @@ function generateAllFiles() {
   const ovShards = testgen.splitOverloadsToShards(overloads);
   writeFileSync('lib/Impl.sol', t.implSol(context, operators));
   writeFileSync('lib/TFHE.sol', tfheSolSource);
-  writeFileSync('mocks/Impl.sol', t.implSolMock(context, operators));
-  const [tfheSolSourceMock, _] = t.tfheSol(context, operators, SUPPORTED_BITS, true);
-  writeFileSync('mocks/TFHE.sol', tfheSolSourceMock);
+  writeFileSync('lib/FhevmLib.sol', t.fhevmLibSol(operators));
+  writeFileSync('lib/FHEPayment.sol', generateFHEPayment(operatorsPrices));
+  writeFileSync('payment/Payment.sol', t.paymentSol());
   mkdirSync('examples/tests', { recursive: true });
   ovShards.forEach((os) => {
     writeFileSync(`examples/tests/TFHETestSuite${os.shardNumber}.sol`, testgen.generateSmartContract(os));
   });
-  writeFileSync('test/tfheOperations/tfheOperations.ts', testgen.generateTestCode(ovShards));
+  const tsSplits: string[] = testgen.generateTestCode(ovShards, numSplits);
+  tsSplits.forEach((split, splitIdx) => writeFileSync(`test/tfheOperations/tfheOperations${splitIdx + 1}.ts`, split));
 }
 
 generateAllFiles();

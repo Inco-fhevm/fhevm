@@ -13,9 +13,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/zama-ai/fhevm/releases"><img src="https://img.shields.io/github/v/release/zama-ai/fhevm?style=flat-square"></a>
-  <a href="license"><img src="https://img.shields.io/badge/License-BSD--3--Clause--Clear-%23ffb243?style=flat-square"></a>
-  <a href="https://github.com/zama-ai/bounty-program"><img src="https://img.shields.io/badge/Contribute-Zama%20Bounty%20Program-%23ffd208?style=flat-square"></a>
+  <a href="https://github.com/zama-ai/fhevm/releases">
+    <img src="https://img.shields.io/github/v/release/zama-ai/fhevm?style=flat-square"></a>
+  <a href="https://github.com/zama-ai/fhevm/blob/main/LICENSE">
+    <!-- markdown-link-check-disable-next-line -->
+    <img src="https://img.shields.io/badge/License-BSD--3--Clause--Clear-%23ffb243?style=flat-square"></a>
+  <a href="https://github.com/zama-ai/bounty-program">
+    <!-- markdown-link-check-disable-next-line -->
+    <img src="https://img.shields.io/badge/Contribute-Zama%20Bounty%20Program-%23ffd208?style=flat-square"></a>
+  <a href="https://slsa.dev"><img alt="SLSA 3" src="https://slsa.dev/images/gh-badge-level3.svg" /></a>
 </p>
 
 ## About
@@ -33,15 +39,15 @@ Thanks to a breakthrough in homomorphic encryption, Zama’s fhEVM makes it poss
 
 ### Main features
 
-- **Solidity Integration:** fhEVM contracts are simple solidity contracts that are built using traditional solidity toolchains.
-- **Simple Developer Experience:** Developers can use the `euint` data types to mark which part of their contracts should be private.
-- **Programmable Privacy:** All the logic for access control of encrypted states is defined by developers in their smart contracts.
-- **High Precision Encrypted Integers :** Up to 256 bits of precision for integers
-- **Full range of Operators :** All typical operators are available: `+`, `-`, `*`, `/`, `<`, `>`, `==`, …
-- **Encrypted If-Else Conditionals :** Check conditions on encrypted states
+- **Solidity integration:** fhEVM contracts are simple solidity contracts that are built using traditional solidity toolchains.
+- **Simple developer experience:** Developers can use the `euint` data types to mark which part of their contracts should be private.
+- **Programmable privacy:** All the logic for access control of encrypted states is defined by developers in their smart contracts.
+- **High precision encrypted integers :** Up to 256 bits of precision for integers
+- **Full range of operators :** All typical operators are available: `+`, `-`, `*`, `/`, `<`, `>`, `==`, …
+- **Encrypted if-else conditionals :** Check conditions on encrypted states
 - **On-chain PRNG :** Generate secure randomness without using oracles
-- **Configurable Decryption :** Threshold, centralized or KMS decryption
-- **Unbounded Compute Depth :** Unlimited consecutive FHE operations
+- **Configurable decryption :** Threshold, centralized or KMS decryption
+- **Unbounded compute Depth :** Unlimited consecutive FHE operations
 
 _Learn more about fhEVM features in the [documentation](https://docs.zama.ai/fhevm)._
 <br></br>
@@ -57,7 +63,7 @@ fhEVM is built for developers to write confidential smart contracts without lear
 - **Encrypted DIDs**: Store identities on-chain and generate attestations without ZK.
 - **Private transfers**: Keep balances and amounts private, without using mixers.
 
-_Learn more use cases in the [list of examples](https://docs.zama.ai/fhevm/resources/examples)._
+_Learn more use cases in the [list of examples](https://docs.zama.ai/fhevm/tutorials/see-all-tutorials)._
 <br></br>
 
 ## Table of Contents
@@ -104,29 +110,30 @@ _Find more details on implementation instructions in [this repository](https://g
 ```solidity
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.24;
 
 import "fhevm/lib/TFHE.sol";
 
 contract Counter {
   euint32 counter;
 
-  function add(bytes calldata encryptedValue) public {
-    euint32 value = TFHE.asEuint32(encryptedValue);
-    counter = counter + value;
-  }
-
-  function getCounter(bytes32 publicKey) returns (bytes memory) {
-    return TFHE.reencrypt(counter, publicKey);
+  function add(einput valueInput, bytes calldata inputProof) public {
+    euint32 value = TFHE.asEuint32(valueInput, inputProof);
+    counter = TFHE.add(counter, value);
+    TFHE.allow(counter, address(this));
   }
 }
 ```
 
-_This example is explained in more detail in [here](https://github.com/zama-ai/fhevm/tree/main/examples)._
+_More examples are available [here](https://github.com/zama-ai/fhevm/tree/main/examples)._
 
 <p align="right">
-  <a href="#about" > ↑ Back to top </a> 
+  <a href="#about" > ↑ Back to top </a>
 </p>
+
+> [!Note] >**Zama 5-Question Developer Survey**
+>
+> We want to hear from you! Take 1 minute to share your thoughts and helping us enhance our documentation and libraries. 👉 **[Click here](https://www.zama.ai/developer-survey)** to participate.
 
 ## Resources
 
@@ -144,7 +151,7 @@ _This example is explained in more detail in [here](https://github.com/zama-ai/f
 
 #### Games:
 
-- [Ciperbomb](https://github.com/immortal-tofu/cipherbomb): A Hardhat-based template for developing Solidity smart contracts, with sensible defaults. - by Clément Danjou
+- [Cipherbomb](https://github.com/immortal-tofu/cipherbomb): A Hardhat-based template for developing Solidity smart contracts, with sensible defaults. - by Clément Danjou
 - [Battleship](https://github.com/battleship-fhevm/battleship-hardhat): A smart contract that replicates the classic Battleship game on a blockchain in a transparent manner. - by [Owen Murovec](https://github.com/omurovec)
 
 #### Others
@@ -163,7 +170,7 @@ _If you have built awesome projects using fhEVM, please let us know and we will 
 - [On-chain Blind Auctions Using Homomorphic Encryption and the fhEVM](https://www.zama.ai/post/on-chain-blind-auctions-using-homomorphic-encryption)
 - [Programmable Privacy and Onchain Compliance using Homomorphic Encryption](https://www.zama.ai/post/programmable-privacy-and-onchain-compliance-using-homomorphic-encryption)
 
-_Explore more useful resources in [fhEVM tutorials](https://docs.zama.ai/fhevm/resources/tutorials) and [Awesome Zama repo](https://github.com/zama-ai/awesome-zama)._
+_Explore more useful resources in [fhEVM tutorials](https://docs.zama.ai/fhevm/tutorials/see-all-tutorials) and [Awesome Zama repo](https://github.com/zama-ai/awesome-zama)._
 <br></br>
 
 ### Documentation
@@ -171,7 +178,7 @@ _Explore more useful resources in [fhEVM tutorials](https://docs.zama.ai/fhevm/r
 Full, comprehensive documentation is available here: [https://docs.zama.ai/fhevm](https://docs.zama.ai/fhevm).
 
 <p align="right">
-  <a href="#about" > ↑ Back to top </a> 
+  <a href="#about" > ↑ Back to top </a>
 </p>
 
 ### Blockchain Implementation
@@ -215,7 +222,7 @@ test/tfheOperations/tfheOperations.ts
 ```
 
 <p align="right">
-  <a href="#about" > ↑ Back to top </a> 
+  <a href="#about" > ↑ Back to top </a>
 </p>
 
 #### Tests
@@ -288,7 +295,7 @@ npx hardhat test --network localNetwork1
 ```
 
 <p align="right">
-  <a href="#about" > ↑ Back to top </a> 
+  <a href="#about" > ↑ Back to top </a>
 </p>
 
 #### Adding new operators
@@ -313,10 +320,10 @@ npm run coverage:mock
 Then open the file `coverage/index.html`. You can see there which line or branch for each contract which has been covered or missed by your test suite. This allows increased security by pointing out missing branches not covered yet by the current tests.
 
 > [!Note]
-> Due to intrinsic limitations of the original EVM, the mocked version differ in few corner cases from the real fhEVM, the most important change is the `TFHE.isInitialized` method which will always return `true` in the mocked version. Another big difference in mocked mode, compared to the real fhEVM implementation, is that there is no ciphertext verification neither checking that a ciphertext has been honestly obtained (see section 4 of the [whitepaper](https://github.com/zama-ai/fhevm/blob/main/fhevm-whitepaper.pdf)). This means that before deploying to production, developers still need to run the tests with the original fhEVM node, as a final check in non-mocked mode, with `npm run test`.
+> Due to intrinsic limitations of the original EVM, the mocked version differ in few corner cases from the real fhEVM, the main difference is the difference in gas prices for the FHE operations. This means that before deploying to production, developers still need to run the tests with the original fhEVM node, as a final check in non-mocked mode, with `npm run test`.
 
 <p align="right">
-  <a href="#about" > ↑ Back to top </a> 
+  <a href="#about" > ↑ Back to top </a>
 </p>
 
 ### Citations
@@ -355,10 +362,30 @@ Becoming an approved contributor involves signing our Contributor License Agreem
 
 ### License
 
-This software is distributed under the **BSD-3-Clause-Clear** license. If you have any questions, please contact us at hello@zama.ai.
+This software is distributed under the **BSD-3-Clause-Clear** license. Read [this](LICENSE) for more details.
+
+#### FAQ
+
+**Is Zama’s technology free to use?**
+
+> Zama’s libraries are free to use under the BSD 3-Clause Clear license only for development, research, prototyping, and experimentation purposes. However, for any commercial use of Zama's open source code, companies must purchase Zama’s commercial patent license.
+>
+> Everything we do is open source and we are very transparent on what it means for our users, you can read more about how we monetize our open source products at Zama in [this blog post](https://www.zama.ai/post/open-source).
+
+**What do I need to do if I want to use Zama’s technology for commercial purposes?**
+
+> To commercially use Zama’s technology you need to be granted Zama’s patent license. Please contact us at hello@zama.ai for more information.
+
+**Do you file IP on your technology?**
+
+> Yes, all Zama’s technologies are patented.
+
+**Can you customize a solution for my specific use case?**
+
+> We are open to collaborating and advancing the FHE space with our partners. If you have specific needs, please email us at hello@zama.ai.
 
 <p align="right">
-  <a href="#table-of-contents" > ↑ Back to top </a> 
+  <a href="#table-of-contents" > ↑ Back to top </a>
 </p>
 
 ## Support
@@ -374,5 +401,5 @@ This software is distributed under the **BSD-3-Clause-Clear** license. If you ha
 🌟 If you find this project helpful or interesting, please consider giving it a star on GitHub! Your support helps to grow the community and motivates further development.
 
 <p align="right">
-  <a href="#about" > ↑ Back to top </a> 
+  <a href="#about" > ↑ Back to top </a>
 </p>

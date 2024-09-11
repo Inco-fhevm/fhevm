@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.24;
 
 import "../../lib/TFHE.sol";
-import "../../abstracts/Reencrypt.sol";
 import "../EncryptedERC20.sol";
 import "./ERC20Rules.sol";
 import "./IdentityRegistry.sol";
@@ -31,26 +30,6 @@ contract CompliantERC20 is EncryptedERC20 {
         return identityContract.getIdentifier(wallet, identifier);
     }
 
-    function balanceOf(
-        address wallet,
-        bytes32 publicKey,
-        bytes calldata signature
-    ) public view override onlySignedPublicKey(publicKey, signature) returns (bytes memory) {
-        if (wallet == msg.sender) {
-            return TFHE.reencrypt(balances[msg.sender], publicKey, 0);
-        }
-
-        uint64 userCountry = rulesContract.whitelistedWallets(msg.sender);
-        require(userCountry > 0, "You're not registered as a country wallet");
-
-        euint64 walletCountry = identityContract.getIdentifier(wallet, "country");
-        ebool sameCountry = TFHE.eq(walletCountry, userCountry);
-        euint64 balance = TFHE.isInitialized(balances[wallet]) ? balances[wallet] : TFHE.asEuint64(0);
-        balance = TFHE.select(sameCountry, balance, TFHE.asEuint64(0));
-
-        return TFHE.reencrypt(balance, publicKey, 0);
-    }
-
     // Transfers an encrypted amount.
     function _transfer(address from, address to, euint64 _amount, ebool isTransferable) internal override {
         // Condition 1: hasEnoughFunds and hasEnoughAllowance (classical ERC20)
@@ -58,8 +37,8 @@ contract CompliantERC20 is EncryptedERC20 {
 
         amount = rulesContract.transfer(from, to, amount);
 
-        balances[to] = balances[to] + amount;
-        balances[from] = balances[from] - amount;
+        balances[to] = TFHE.add(balances[to], amount);
+        balances[from] = TFHE.sub(balances[from], amount);
         emit Transfer(from, to);
     }
 }

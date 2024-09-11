@@ -1,16 +1,14 @@
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 
-import "../../abstracts/Reencrypt.sol";
-
 import "../../lib/TFHE.sol";
 
-contract IdentityRegistry is Reencrypt, Ownable2Step {
+contract IdentityRegistry is Ownable2Step {
     uint constant MAX_IDENTIFIERS_LENGTH = 20;
 
     // A mapping from wallet to registrarId
@@ -65,8 +63,13 @@ contract IdentityRegistry is Reencrypt, Ownable2Step {
     }
 
     // Set user's identifiers
-    function setIdentifier(address wallet, string calldata identifier, bytes calldata encryptedValue) public {
-        euint64 value = TFHE.asEuint64(encryptedValue);
+    function setIdentifier(
+        address wallet,
+        string calldata identifier,
+        einput encryptedValue,
+        bytes calldata inputProof
+    ) public {
+        euint64 value = TFHE.asEuint64(encryptedValue, inputProof);
         setIdentifier(wallet, identifier, value);
     }
 
@@ -114,18 +117,18 @@ contract IdentityRegistry is Reencrypt, Ownable2Step {
         }
     }
 
-    // Get encrypted identifiers
-    function reencryptIdentifier(
-        address wallet,
-        string calldata identifier,
-        bytes32 publicKey,
-        bytes calldata signature
-    ) public view onlySignedPublicKey(publicKey, signature) returns (bytes memory) {
-        euint64 ident = _getIdentifier(wallet, identifier);
-        require(TFHE.isInitialized(ident), "This identifier is unknown");
+    // // Get encrypted identifiers
+    // function reencryptIdentifier(
+    //     address wallet,
+    //     string calldata identifier,
+    //     bytes32 publicKey,
+    //     bytes calldata signature
+    // ) public view onlySignedPublicKey(publicKey, signature) returns (bytes memory) {
+    //     euint64 ident = _getIdentifier(wallet, identifier);
+    //     require(TFHE.isInitialized(ident), "This identifier is unknown");
 
-        return TFHE.reencrypt(ident, publicKey, 0);
-    }
+    //     return TFHE.reencrypt(ident, publicKey);
+    // }
 
     function getRegistrar(address wallet) public view returns (uint) {
         return identities[wallet].registrarId;
