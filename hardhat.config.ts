@@ -213,6 +213,7 @@ const config: HardhatUserConfig = {
     local: getChainConfig('local'),
     localNetwork1: getChainConfig('localNetwork1'),
     multipleValidatorTestnet: getChainConfig('multipleValidatorTestnet'),
+    rivest: getChainConfig('rivest'),
   },
   paths: {
     artifacts: './artifacts',
