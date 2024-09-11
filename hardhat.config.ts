@@ -176,7 +176,7 @@ const config: HardhatUserConfig = {
       },
     }),
   },
-  defaultNetwork: 'local',
+  defaultNetwork: 'rivest',
   namedAccounts: {
     deployer: 0,
   },
