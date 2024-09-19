@@ -46,6 +46,7 @@ const chainIds = {
   local: 9000,
   localNetwork1: 9000,
   multipleValidatorTestnet: 8009,
+  rivest: 9000,
 };
 
 function getChainConfig(chain: keyof typeof chainIds): NetworkUserConfig {
@@ -63,6 +64,11 @@ function getChainConfig(chain: keyof typeof chainIds): NetworkUserConfig {
     case 'zama':
       jsonRpcUrl = 'https://devnet.zama.ai';
       break;
+    case 'rivest':
+      if (!process.env.RIVEST_JSON_RPC_URL) {
+        throw new Error('RIVEST_JSON_RPC_URL must be set');
+      }
+      jsonRpcUrl = process.env.RIVEST_JSON_RPC_URL;
   }
   return {
     accounts: {
@@ -108,7 +114,7 @@ task('test', async (taskArgs, hre, runSuper) => {
 });
 
 const config: HardhatUserConfig = {
-  defaultNetwork: 'local',
+  defaultNetwork: 'rivest',
   namedAccounts: {
     deployer: 0,
   },
@@ -134,6 +140,7 @@ const config: HardhatUserConfig = {
     local: getChainConfig('local'),
     localNetwork1: getChainConfig('localNetwork1'),
     multipleValidatorTestnet: getChainConfig('multipleValidatorTestnet'),
+    rivest: getChainConfig('rivest'),
   },
   paths: {
     artifacts: './artifacts',
