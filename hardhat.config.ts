@@ -97,7 +97,7 @@ const chainIds = {
   local: 9000,
   localNetwork1: 9000,
   multipleValidatorTestnet: 8009,
-  rivest: 9000,
+  rivest: 21097,
 };
 
 function getChainConfig(chain: keyof typeof chainIds): NetworkUserConfig {
