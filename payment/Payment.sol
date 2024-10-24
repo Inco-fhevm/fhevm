@@ -4,12 +4,7 @@ pragma solidity ^0.8.24;
 
 import "../lib/FHEVMConfig.sol";
 import "../lib/Impl.sol";
-
-interface IFHEPayment {
-    function depositETH(address account) external payable;
-    function withdrawETH(uint256 amount, address receiver) external;
-    function getAvailableDepositsETH(address account) external view returns (uint256);
-}
+import "../lib/IFHEPayment.sol";
 
 library Payment {
     function depositForAccount(address account, uint256 amount) internal {

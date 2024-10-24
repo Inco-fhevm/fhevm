@@ -5,9 +5,9 @@ pragma solidity ^0.8.24;
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
-import "./TFHEExecutorAddress.sol";
+import "./FHEVMConfig.sol";
 
-contract ACL is UUPSUpgradeable, Ownable2StepUpgradeable {
+contract ACL is UUPSUpgradeable, Ownable2StepUpgradeable, IFHEVMConfigurable {
     /// @notice Name of the contract
     string private constant CONTRACT_NAME = "ACL";
 
@@ -16,7 +16,7 @@ contract ACL is UUPSUpgradeable, Ownable2StepUpgradeable {
     uint256 private constant MINOR_VERSION = 1;
     uint256 private constant PATCH_VERSION = 0;
 
-    address private constant tfheExecutorAddress = tfheExecutorAdd;
+    IFHEVMProvider private fhevmProvider;
 
     /// @custom:storage-location erc7201:fhevm.storage.ACL
     struct ACLStorage {
@@ -34,11 +34,6 @@ contract ACL is UUPSUpgradeable, Ownable2StepUpgradeable {
         }
     }
 
-    /// @notice Getter function for the TFHEExecutor contract address
-    function getTFHEExecutorAddress() public view virtual returns (address) {
-        return tfheExecutorAddress;
-    }
-
     event NewDelegation(address indexed sender, address indexed delegatee, address indexed contractAddress);
     event AllowedForDecryption(uint256[] handlesList);
 
@@ -54,11 +49,15 @@ contract ACL is UUPSUpgradeable, Ownable2StepUpgradeable {
         __Ownable_init(initialOwner);
     }
 
+    function setFHEVMProvider(address fhevmProviderAddress) external {
+        fhevmProvider = IFHEVMProvider(fhevmProviderAddress);
+    }
+
     // allowTransient use of `handle` for address `account`.
     // The caller must be allowed to use `handle` for allowTransient() to succeed. If not, allowTransient() reverts.
     // @note: The Coprocessor contract can always `allowTransient`, contrarily to `allow`
     function allowTransient(uint256 handle, address account) public virtual {
-        if (msg.sender != tfheExecutorAddress) {
+        if (msg.sender != fhevmProvider.getTFHEExecutorAddress()) {
             require(isAllowed(handle, msg.sender), "sender isn't allowed");
         }
         bytes32 key = keccak256(abi.encodePacked(handle, account));
@@ -159,15 +158,15 @@ contract ACL is UUPSUpgradeable, Ownable2StepUpgradeable {
     function getVersion() external pure virtual returns (string memory) {
         return
             string(
-                abi.encodePacked(
-                    CONTRACT_NAME,
-                    " v",
-                    Strings.toString(MAJOR_VERSION),
-                    ".",
-                    Strings.toString(MINOR_VERSION),
-                    ".",
-                    Strings.toString(PATCH_VERSION)
-                )
-            );
+            abi.encodePacked(
+                CONTRACT_NAME,
+                " v",
+                Strings.toString(MAJOR_VERSION),
+                ".",
+                Strings.toString(MINOR_VERSION),
+                ".",
+                Strings.toString(PATCH_VERSION)
+            )
+        );
     }
 }
