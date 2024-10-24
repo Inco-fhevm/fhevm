@@ -16,6 +16,7 @@ import './tasks/taskDeploy';
 import './tasks/taskGatewayRelayer';
 import './tasks/taskTFHE';
 import './tasks/upgradeProxy';
+import {mustGetEnv} from "./tasks/environment";
 
 extendProvider(async (provider) => {
   const newProvider = new CustomProvider(provider);
@@ -70,7 +71,7 @@ function getChainConfig(chain: keyof typeof chainIds): NetworkUserConfig {
       gatewayUrl = 'https://gateway.devnet.zama.ai';
       break;
     case 'sepolia':
-      jsonRpcUrl = process.env.SEPOLIA_RPC_URL!;
+      jsonRpcUrl = mustGetEnv('SEPOLIA_RPC_URL');
   }
   return {
     accounts: {
@@ -133,7 +134,7 @@ const config: HardhatUserConfig = {
   },
   gasReporter: {
     currency: 'USD',
-    enabled: process.env.REPORT_GAS ? true : false,
+    enabled: !!process.env.REPORT_GAS,
     excludeContracts: [],
     src: './examples',
   },

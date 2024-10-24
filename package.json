@@ -30,7 +30,7 @@
     "task:deployGateway": "hardhat task:deployGateway",
     "task:addRelayer": "hardhat task:addRelayer",
     "task:removeRelayer": "hardhat task:removeRelayer",
-    "fhevm:start": " ./launch-fhevm.sh",
+    "fhevm:start": " ./launch-fhevm-sepolia.sh",
     "fhevm:stop": "docker rm -f fhevm",
     "fhevm:restart": "fhevm:stop && fhevm:start"
   },

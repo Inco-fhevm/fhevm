@@ -1,8 +1,8 @@
 import dotenv from 'dotenv';
+import { ContractTransactionResponse } from 'ethers';
 import fs from 'fs';
 import { task, types } from 'hardhat/config';
 import type { TaskArguments } from 'hardhat/types';
-import { KMSVerifier__factory } from '../types';
 import { mustGetEnv } from './environment';
 
 task('task:deployGateway')
@@ -119,6 +119,10 @@ task('task:deployFHEPayment')
     console.log('FHEPayment was deployed at address:', address);
   });
 
+interface IKMSVerifierMinimal {
+  addSigner(signer: string): Promise<ContractTransactionResponse>;
+}
+
 task('task:addSigners')
   .addParam('privateKey', 'The deployer private key')
   .addParam('numSigners', 'Number of KMS signers to add')
@@ -130,8 +134,12 @@ task('task:addSigners')
   )
   .setAction(async function (taskArguments: TaskArguments, { ethers }) {
     const deployer = new ethers.Wallet(taskArguments.privateKey).connect(ethers.provider);
+    const factory = await ethers.getContractFactory('KMSVerifier', deployer);
     const kmsAdd = dotenv.parse(fs.readFileSync('lib/.env.kmsverifier')).KMS_VERIFIER_CONTRACT_ADDRESS;
-    const kmsVerifier = KMSVerifier__factory.connect(kmsAdd, deployer);
+    // NOTE: we cannot use the Typechain types here due to bootstrapping issues: from a fresh clone types are
+    // not available, and if we use them here npm run typechain will fail, if we could then we'd use:
+    //   const kmsVerifier = KMSVerifier__factory.connect(kmsAdd, deployer);
+    const kmsVerifier = factory.attach(kmsAdd) as unknown as IKMSVerifierMinimal
     for (let idx = 0; idx < taskArguments.numSigners; idx++) {
       if (!taskArguments.useAddress) {
         const privKeySigner = mustGetEnv(`PRIVATE_KEY_KMS_SIGNER_${idx}`);

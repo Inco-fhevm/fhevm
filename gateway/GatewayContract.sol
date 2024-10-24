@@ -6,11 +6,9 @@ import "../lib/TFHE.sol";
 import "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
-import "../lib/KMSVerifierAddress.sol";
-import "../lib/ACLAddress.sol";
 import "./IKMSVerifier.sol";
 
-contract GatewayContract is UUPSUpgradeable, Ownable2StepUpgradeable {
+contract GatewayContract is UUPSUpgradeable, Ownable2StepUpgradeable, IFHEVMConfigurable {
     /// @notice Name of the contract
     string private constant CONTRACT_NAME = "GatewayContract";
 
@@ -19,8 +17,7 @@ contract GatewayContract is UUPSUpgradeable, Ownable2StepUpgradeable {
     uint256 private constant MINOR_VERSION = 1;
     uint256 private constant PATCH_VERSION = 0;
 
-    IKMSVerifier private constant kmsVerifier = IKMSVerifier(kmsVerifierAdd);
-    address private constant aclAddress = aclAdd;
+    IFHEVMProvider private fhevmProvider;
 
     uint256 private constant MAX_DELAY = 1 days;
 
@@ -79,7 +76,7 @@ contract GatewayContract is UUPSUpgradeable, Ownable2StepUpgradeable {
 
     // keccak256(abi.encode(uint256(keccak256("fhevm.storage.GatewayContract")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant GatewayContractStorageLocation =
-        0x2f81b8bba57448689ab73c47570e3de1ee7f779a62f121c9631b35b3eda2aa00;
+    0x2f81b8bba57448689ab73c47570e3de1ee7f779a62f121c9631b35b3eda2aa00;
 
     function _getGatewayContractStorage() internal pure returns (GatewayContractStorage storage $) {
         assembly {
@@ -94,6 +91,10 @@ contract GatewayContract is UUPSUpgradeable, Ownable2StepUpgradeable {
 
     function initialize(address _gatewayOwner) external initializer {
         __Ownable_init(_gatewayOwner);
+    }
+
+    function setFHEVMProvider(address fhevmProviderAddress) external {
+        fhevmProvider = IFHEVMProvider(fhevmProviderAddress);
     }
 
     modifier onlyRelayer() {
@@ -177,9 +178,10 @@ contract GatewayContract is UUPSUpgradeable, Ownable2StepUpgradeable {
         bytes[] memory signatures
     ) external payable virtual onlyRelayer {
         GatewayContractStorage storage $ = _getGatewayContractStorage();
+        IKMSVerifier kmsVerifier = IKMSVerifier(fhevmProvider.getKMSVerifierAddress());
         require(
             kmsVerifier.verifyDecryptionEIP712KMSSignatures(
-                aclAddress,
+                fhevmProvider.getACLAddress(),
                 $.decryptionRequests[requestID].cts,
                 decryptedCts,
                 signatures
@@ -219,15 +221,15 @@ contract GatewayContract is UUPSUpgradeable, Ownable2StepUpgradeable {
     function getVersion() external pure virtual returns (string memory) {
         return
             string(
-                abi.encodePacked(
-                    CONTRACT_NAME,
-                    " v",
-                    Strings.toString(MAJOR_VERSION),
-                    ".",
-                    Strings.toString(MINOR_VERSION),
-                    ".",
-                    Strings.toString(PATCH_VERSION)
-                )
-            );
+            abi.encodePacked(
+                CONTRACT_NAME,
+                " v",
+                Strings.toString(MAJOR_VERSION),
+                ".",
+                Strings.toString(MINOR_VERSION),
+                ".",
+                Strings.toString(PATCH_VERSION)
+            )
+        );
     }
 }
