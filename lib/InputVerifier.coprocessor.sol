@@ -5,6 +5,7 @@ import "./KMSVerifier.sol";
 import "./TFHEExecutor.sol";
 import "./KMSVerifierAddress.sol";
 import "./CoprocessorAddress.sol";
+import "./IInputVerifier.sol";
 
 // Importing OpenZeppelin contracts for cryptographic signature verification and access control.
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -67,7 +68,7 @@ contract InputVerifier is UUPSUpgradeable, Ownable2StepUpgradeable, EIP712Upgrad
     }
 
     /// @notice Initializes the contract setting `initialOwner` as the initial owner
-    function initialize(address initialOwner) external initializer {
+    function initialize(address initialOwner) public initializer {
         __Ownable_init(initialOwner);
         __EIP712_init(CONTRACT_NAME, "1");
     }
@@ -98,10 +99,10 @@ contract InputVerifier is UUPSUpgradeable, Ownable2StepUpgradeable, EIP712Upgrad
     }
 
     function verifyCiphertext(
-        TFHEExecutor.ContextUserInputs memory context,
+        IInputVerifier.ContextUserInputs memory context,
         bytes32 inputHandle,
         bytes memory inputProof
-    ) external virtual returns (uint256) {
+    ) public virtual returns (uint256) {
         (bool isProofCached, bytes32 cacheKey) = checkProofCache(
             inputProof,
             context.userAddress,

@@ -9,6 +9,7 @@ import { resolve } from 'path';
 import CustomProvider from './CustomProvider';
 import './hardhat.config.types';
 import './tasks/accounts';
+import { mustGetEnv } from './tasks/environment';
 import './tasks/etherscanVerify';
 import './tasks/getEthereumAddress';
 import './tasks/mint';
@@ -70,7 +71,7 @@ function getChainConfig(chain: keyof typeof chainIds): NetworkUserConfig {
       gatewayUrl = 'https://gateway.devnet.zama.ai';
       break;
     case 'sepolia':
-      jsonRpcUrl = process.env.SEPOLIA_RPC_URL!;
+      jsonRpcUrl = mustGetEnv('SEPOLIA_RPC_URL');
   }
   return {
     accounts: {

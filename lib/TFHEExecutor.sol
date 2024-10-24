@@ -6,11 +6,10 @@ import "./ACL.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
-import "./Impl.sol";
 import "./IFHEPayment.sol";
 import "./IInputVerifier.sol";
 
-contract TFHEExecutor is UUPSUpgradeable, Ownable2StepUpgradeable, IFHEVMProvider {
+contract TFHEExecutor is UUPSUpgradeable, Ownable2StepUpgradeable, IFHEVMProviderReceiver {
     /// @notice Handle version
     uint8 public constant HANDLE_VERSION = 0;
 
@@ -22,6 +21,8 @@ contract TFHEExecutor is UUPSUpgradeable, Ownable2StepUpgradeable, IFHEVMProvide
     uint256 private constant MINOR_VERSION = 1;
     uint256 private constant PATCH_VERSION = 0;
 
+    IFHEVMConfigProvider private fhevmProvider;
+
     /// @custom:storage-location erc7201:fhevm.storage.TFHEExecutor
     struct TFHEExecutorStorage {
         uint256 counterRand; /// @notice counter used for computing handles of randomness operators
@@ -29,7 +30,7 @@ contract TFHEExecutor is UUPSUpgradeable, Ownable2StepUpgradeable, IFHEVMProvide
 
     // keccak256(abi.encode(uint256(keccak256("fhevm.storage.TFHEExecutor")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant TFHEExecutorStorageLocation =
-    0xa436a06f0efce5ea38c956a21e24202a59b3b746d48a23fb52b4a5bc33fe3e00;
+        0xa436a06f0efce5ea38c956a21e24202a59b3b746d48a23fb52b4a5bc33fe3e00;
 
     function _getTFHEExecutorStorage() internal pure returns (TFHEExecutorStorage storage $) {
         assembly {
@@ -38,10 +39,6 @@ contract TFHEExecutor is UUPSUpgradeable, Ownable2StepUpgradeable, IFHEVMProvide
     }
 
     function _authorizeUpgrade(address _newImplementation) internal virtual override onlyOwner {}
-
-    function getFHEVMConfig() internal pure returns (FHEVMConfig.FHEVMConfigStruct storage $) {
-        $ = Impl.getFHEVMConfig();
-    }
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -158,8 +155,7 @@ contract TFHEExecutor is UUPSUpgradeable, Ownable2StepUpgradeable, IFHEVMProvide
         requireType(lhs, supportedTypes);
         uint8 lhsType = typeOf(lhs);
         bytes1 scalar = scalarByte & 0x01;
-        FHEVMConfig.FHEVMConfigStruct storage $ = Impl.getFHEVMConfig();
-        IFHEPayment($.FHEPaymentAddress).payForFheAdd(msg.sender, lhsType, scalar);
+        getFHEPayment().payForFheAdd(msg.sender, lhsType, scalar);
         result = binaryOp(Operators.fheAdd, lhs, rhs, scalar, lhsType);
     }
 
@@ -431,7 +427,7 @@ contract TFHEExecutor is UUPSUpgradeable, Ownable2StepUpgradeable, IFHEVMProvide
         address userAddress,
         bytes memory inputProof,
         bytes1 inputType
-    ) external virtual returns (uint256 result) {
+    ) public virtual returns (uint256 result) {
         IInputVerifier.ContextUserInputs memory contextUserInputs = IInputVerifier.ContextUserInputs({
             aclAddress: address(getACL()),
             userAddress: userAddress,
@@ -443,7 +439,7 @@ contract TFHEExecutor is UUPSUpgradeable, Ownable2StepUpgradeable, IFHEVMProvide
         getACL().allowTransient(result, msg.sender);
     }
 
-    function cast(uint256 ct, bytes1 toType) external virtual returns (uint256 result) {
+    function cast(uint256 ct, bytes1 toType) public virtual returns (uint256 result) {
         require(getACL().isAllowed(ct, msg.sender), "Sender doesn't own ct on cast");
         uint256 supportedTypesInput = (1 << 0) +
             (1 << 1) +
@@ -464,7 +460,7 @@ contract TFHEExecutor is UUPSUpgradeable, Ownable2StepUpgradeable, IFHEVMProvide
         getACL().allowTransient(result, msg.sender);
     }
 
-    function trivialEncrypt(uint256 pt, bytes1 toType) external virtual returns (uint256 result) {
+    function trivialEncrypt(uint256 pt, bytes1 toType) public virtual returns (uint256 result) {
         uint256 supportedTypes = (1 << 0) +
             (1 << 1) +
             (1 << 2) +
@@ -482,7 +478,7 @@ contract TFHEExecutor is UUPSUpgradeable, Ownable2StepUpgradeable, IFHEVMProvide
         getACL().allowTransient(result, msg.sender);
     }
 
-    function trivialEncrypt(bytes memory pt, bytes1 toType) external virtual returns (uint256 result) {
+    function trivialEncrypt(bytes memory pt, bytes1 toType) public virtual returns (uint256 result) {
         // @note: overloaded function for ebytesXX types
         uint256 supportedTypes = (1 << 9) + (1 << 10) + (1 << 11);
         uint8 toT = uint8(toType);
@@ -521,7 +517,7 @@ contract TFHEExecutor is UUPSUpgradeable, Ownable2StepUpgradeable, IFHEVMProvide
         result = ternaryOp(Operators.fheIfThenElse, control, ifTrue, ifFalse);
     }
 
-    function fheRand(bytes1 randType) external virtual returns (uint256 result) {
+    function fheRand(bytes1 randType) public virtual returns (uint256 result) {
         TFHEExecutorStorage storage $ = _getTFHEExecutorStorage();
         uint256 supportedTypes = (1 << 0) +
             (1 << 1) +
@@ -538,7 +534,9 @@ contract TFHEExecutor is UUPSUpgradeable, Ownable2StepUpgradeable, IFHEVMProvide
         require((1 << randT) & supportedTypes > 0, "Unsupported erandom type");
         getFHEPayment().payForFheRand(msg.sender, randT);
         bytes16 seed = bytes16(
-            keccak256(abi.encodePacked($.counterRand, getACL(), block.chainid, blockhash(block.number - 1), block.timestamp))
+            keccak256(
+                abi.encodePacked($.counterRand, getACL(), block.chainid, blockhash(block.number - 1), block.timestamp)
+            )
         );
         result = uint256(keccak256(abi.encodePacked(Operators.fheRand, randType, seed)));
         result = appendType(result, randT);
@@ -546,7 +544,7 @@ contract TFHEExecutor is UUPSUpgradeable, Ownable2StepUpgradeable, IFHEVMProvide
         $.counterRand++;
     }
 
-    function fheRandBounded(uint256 upperBound, bytes1 randType) external virtual returns (uint256 result) {
+    function fheRandBounded(uint256 upperBound, bytes1 randType) public virtual returns (uint256 result) {
         TFHEExecutorStorage storage $ = _getTFHEExecutorStorage();
         uint256 supportedTypes = (1 << 1) + (1 << 2) + (1 << 3) + (1 << 4) + (1 << 5) + (1 << 6) + (1 << 8);
         uint8 randT = uint8(randType);
@@ -554,7 +552,9 @@ contract TFHEExecutor is UUPSUpgradeable, Ownable2StepUpgradeable, IFHEVMProvide
         require(isPowerOfTwo(upperBound), "UpperBound must be a power of 2");
         getFHEPayment().payForFheRandBounded(msg.sender, randT);
         bytes16 seed = bytes16(
-            keccak256(abi.encodePacked($.counterRand, getACL(), block.chainid, blockhash(block.number - 1), block.timestamp))
+            keccak256(
+                abi.encodePacked($.counterRand, getACL(), block.chainid, blockhash(block.number - 1), block.timestamp)
+            )
         );
         result = uint256(keccak256(abi.encodePacked(Operators.fheRandBounded, upperBound, randType, seed)));
         result = appendType(result, randT);
@@ -562,44 +562,20 @@ contract TFHEExecutor is UUPSUpgradeable, Ownable2StepUpgradeable, IFHEVMProvide
         $.counterRand++;
     }
 
-    function getFHEPayment() private view returns (IFHEPayment) {
-        FHEVMConfig.FHEVMConfigStruct storage $ = Impl.getFHEVMConfig();
-        return IFHEPayment($.FHEPaymentAddress);
+    function getFHEPayment() internal view returns (IFHEPayment) {
+        return IFHEPayment(fhevmProvider.getFHEVMConfig().FHEPaymentAddress);
     }
 
-    function getInputVerifier() private view returns (IInputVerifier) {
-        FHEVMConfig.FHEVMConfigStruct storage $ = Impl.getFHEVMConfig();
-        return IInputVerifier($.InputVerifierAddress);
+    function getInputVerifier() internal view returns (IInputVerifier) {
+        return IInputVerifier(fhevmProvider.getFHEVMConfig().InputVerifierAddress);
     }
 
-    function getACL() private view returns (ACL) {
-        FHEVMConfig.FHEVMConfigStruct storage $ = Impl.getFHEVMConfig();
-        return ACL($.ACLAddress);
+    function getACL() internal view returns (ACL) {
+        return ACL(fhevmProvider.getFHEVMConfig().ACLAddress);
     }
 
-    function getFHEPaymentAddress() external view returns (address) {
-        FHEVMConfig.FHEVMConfigStruct storage $ = Impl.getFHEVMConfig();
-        return $.FHEPaymentAddress;
-    }
-
-    function getInputVerifierAddress() external view returns (address){
-        FHEVMConfig.FHEVMConfigStruct storage $ = Impl.getFHEVMConfig();
-        return $.InputVerifierAddress;
-    }
-
-    function getTFHEExecutorAddress() external view returns (address) {
-        // FIXME: this may mean we do not need TFHEExecutorAddress on the config struct at all
-        return address(this);
-    }
-
-    function getKMSVerifierAddress() external view returns (address) {
-        FHEVMConfig.FHEVMConfigStruct storage $ = Impl.getFHEVMConfig();
-        return $.KMSVerifierAddress;
-    }
-
-    function getACLAddress() external view returns (address) {
-        FHEVMConfig.FHEVMConfigStruct storage $ = Impl.getFHEVMConfig();
-        return $.ACLAddress;
+    function setFHEVMProvider(address fhevmProviderAddress) external onlyOwner {
+        fhevmProvider = IFHEVMConfigProvider(fhevmProviderAddress);
     }
 
     /// @notice Getter for the name and version of the contract
@@ -607,15 +583,15 @@ contract TFHEExecutor is UUPSUpgradeable, Ownable2StepUpgradeable, IFHEVMProvide
     function getVersion() external pure virtual returns (string memory) {
         return
             string(
-            abi.encodePacked(
-                CONTRACT_NAME,
-                " v",
-                Strings.toString(MAJOR_VERSION),
-                ".",
-                Strings.toString(MINOR_VERSION),
-                ".",
-                Strings.toString(PATCH_VERSION)
-            )
-        );
+                abi.encodePacked(
+                    CONTRACT_NAME,
+                    " v",
+                    Strings.toString(MAJOR_VERSION),
+                    ".",
+                    Strings.toString(MINOR_VERSION),
+                    ".",
+                    Strings.toString(PATCH_VERSION)
+                )
+            );
     }
 }

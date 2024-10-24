@@ -8,15 +8,15 @@ import "./KMSVerifierAddress.sol";
 import "./TFHEExecutorAddress.sol";
 import "./InputVerifierAddress.sol";
 
-interface IFHEVMProvider {
-    function getFHEPaymentAddress() external view returns (address);
-    function getInputVerifierAddress() external view returns (address);
-    function getTFHEExecutorAddress() external view returns (address);
-    function getKMSVerifierAddress() external view returns (address);
-    function getACLAddress() external view returns (address);
+interface IFHEVMConfigProvider {
+    function getFHEVMConfig() external view returns (FHEVMConfig.FHEVMConfigStruct memory fhevmConfig);
 }
 
-interface IFHEVMConfigurable {
+interface IFHEVMConfigReceiver {
+    function setFHEVMConfig(FHEVMConfig.FHEVMConfigStruct memory fhevmConfig) external;
+}
+
+interface IFHEVMProviderReceiver {
     function setFHEVMProvider(address fhevmProviderAddress) external;
 }
 
