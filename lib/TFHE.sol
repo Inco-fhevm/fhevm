@@ -36,10 +36,6 @@ library Common {
 }
 
 library TFHE {
-    function use(IFHEVMConfigProvider provider) internal {
-        Impl.setFHEVM(provider.getFHEVMConfig());
-    }
-
     function setFHEVM(FHEVMConfig.FHEVMConfigStruct memory fhevmConfig) internal {
         Impl.setFHEVM(fhevmConfig);
     }

@@ -68,11 +68,10 @@ function generateIntroTestCode(shards: OverloadShard[], idxSplit: number): strin
     import { getSigners, initSigners } from '../signers';
 
   `);
-  shards.forEach((os) => {
-    intro.push(`
-  import type { TFHETestSuite${os.shardNumber} } from '../../types';
+  intro.push(`
+  import type { 
+${shards.map((os) => `    TFHETestSuite${os.shardNumber}`).join(',\n')}  } from '../../types';
   `);
-  });
 
   shards.forEach((os) => {
     intro.push(`
