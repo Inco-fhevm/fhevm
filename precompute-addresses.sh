@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 npx hardhat clean
 
 PRIVATE_KEY_GATEWAY_DEPLOYER=$(grep PRIVATE_KEY_GATEWAY_DEPLOYER .env | cut -d '"' -f 2)

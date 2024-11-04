@@ -5,6 +5,7 @@ import "./KMSVerifier.sol";
 import "./TFHEExecutor.sol";
 import "./KMSVerifierAddress.sol";
 import "./CoprocessorAddress.sol";
+import "./IInputVerifier.sol";
 
 // Importing OpenZeppelin contracts for cryptographic signature verification and access control.
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -73,7 +74,7 @@ contract InputVerifier is UUPSUpgradeable, Ownable2StepUpgradeable {
     }
 
     function verifyCiphertext(
-        TFHEExecutor.ContextUserInputs memory context,
+        IInputVerifier.ContextUserInputs memory context,
         bytes32 inputHandle,
         bytes memory inputProof
     ) external virtual returns (uint256) {

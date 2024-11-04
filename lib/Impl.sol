@@ -68,6 +68,7 @@ library Impl {
         $.TFHEExecutorAddress = fhevmConfig.TFHEExecutorAddress;
         $.FHEPaymentAddress = fhevmConfig.FHEPaymentAddress;
         $.KMSVerifierAddress = fhevmConfig.KMSVerifierAddress;
+        $.InputVerifierAddress = fhevmConfig.InputVerifierAddress;
     }
 
     function add(uint256 lhs, uint256 rhs, bool scalar) internal returns (uint256 result) {

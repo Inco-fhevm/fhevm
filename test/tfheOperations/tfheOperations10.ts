@@ -1,5 +1,7 @@
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
+import { createInstances, decrypt128, decrypt256, decryptBool } from '../instance';
+import { getSigners, initSigners } from '../signers';
 
 import type {
   TFHETestSuite1,
@@ -14,8 +16,6 @@ import type {
   TFHETestSuite8,
   TFHETestSuite9,
 } from '../../types';
-import { createInstances, decrypt128, decrypt256, decryptBool } from '../instance';
-import { getSigners, initSigners } from '../signers';
 
 async function deployTfheTestFixture1(): Promise<TFHETestSuite1> {
   const signers = await getSigners();
