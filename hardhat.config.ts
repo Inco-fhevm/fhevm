@@ -238,6 +238,22 @@ const config: HardhatUserConfig = {
       evmVersion: 'cancun',
     },
   },
+  etherscan: {
+    apiKey: {
+      // Is not required by blockscout. Can be any non-empty string
+      'rivest': "abc"
+    },
+    customChains: [
+      {
+        network: "rivest",
+        chainId: 21097,
+        urls: {
+          apiURL: "https://api.explorer.rivest.inco.org/api",
+          browserURL: "https://explorer.rivest.inco.org",
+        }
+      }
+    ]
+  },
   warnings: {
     '*': {
       'transient-storage': false,
