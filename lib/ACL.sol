@@ -5,9 +5,10 @@ pragma solidity ^0.8.24;
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
-import "./TFHEExecutorAddress.sol";
+import "./FHEVMConfig.sol";
+import "./Impl.sol";
 
-contract ACL is UUPSUpgradeable, Ownable2StepUpgradeable {
+contract ACL is UUPSUpgradeable, Ownable2StepUpgradeable, IFHEVMConfigReceiver, IFHEVMConfigProvider {
     /// @notice Name of the contract
     string private constant CONTRACT_NAME = "ACL";
 
@@ -15,8 +16,6 @@ contract ACL is UUPSUpgradeable, Ownable2StepUpgradeable {
     uint256 private constant MAJOR_VERSION = 0;
     uint256 private constant MINOR_VERSION = 1;
     uint256 private constant PATCH_VERSION = 0;
-
-    address private constant tfheExecutorAddress = tfheExecutorAdd;
 
     /// @custom:storage-location erc7201:fhevm.storage.ACL
     struct ACLStorage {
@@ -32,10 +31,6 @@ contract ACL is UUPSUpgradeable, Ownable2StepUpgradeable {
         assembly {
             $.slot := ACLStorageLocation
         }
-    }
-
-    function getTFHEExecutorAddress() public view virtual returns (address) {
-        return tfheExecutorAddress;
     }
 
     event NewDelegation(address indexed sender, address indexed delegatee, address indexed contractAddress);
@@ -57,7 +52,8 @@ contract ACL is UUPSUpgradeable, Ownable2StepUpgradeable {
     // The caller must be allowed to use `handle` for allowTransient() to succeed. If not, allowTransient() reverts.
     // @note: The Coprocessor contract can always `allowTransient`, contrarily to `allow`
     function allowTransient(uint256 handle, address account) public virtual {
-        if (msg.sender != tfheExecutorAddress) {
+        FHEVMConfig.FHEVMConfigStruct storage $ = Impl.getFHEVMConfig();
+        if (msg.sender != $.TFHEExecutorAddress) {
             require(isAllowed(handle, msg.sender), "sender isn't allowed");
         }
         bytes32 key = keccak256(abi.encodePacked(handle, account));
@@ -148,7 +144,7 @@ contract ACL is UUPSUpgradeable, Ownable2StepUpgradeable {
         emit AllowedForDecryption(handlesList);
     }
 
-    function isAllowedForDecryption(uint256 handle) public virtual returns (bool) {
+    function isAllowedForDecryption(uint256 handle) public view virtual returns (bool) {
         ACLStorage storage $ = _getACLStorage();
         return $.allowedForDecryption[handle];
     }
@@ -168,5 +164,13 @@ contract ACL is UUPSUpgradeable, Ownable2StepUpgradeable {
                     Strings.toString(PATCH_VERSION)
                 )
             );
+    }
+
+    function setFHEVMConfig(FHEVMConfig.FHEVMConfigStruct memory fhevmConfig) external onlyOwner {
+        Impl.setFHEVM(fhevmConfig);
+    }
+
+    function getFHEVMConfig() external view returns (FHEVMConfig.FHEVMConfigStruct memory $) {
+        $ = Impl.getFHEVMConfig();
     }
 }

@@ -1,6 +1,10 @@
-# Decrypt
+# Decryption
 
-The decryption operation is asynchronous. To use it, your contract must extend the `GatewayCaller` contract. This will import automatically the `Gateway` solidity library as well. See the following example:
+This document provides a guide on performing decryption on smart contracts in Solidity.
+
+## Overview
+
+The decryption operation is asynchronous. To use it, your contract must extend the `GatewayCaller` contract. This action will import automatically the `Gateway` solidity library as well. See the following example:
 
 ```solidity
 pragma solidity ^0.8.24;
@@ -29,7 +33,14 @@ contract TestAsyncDecrypt is GatewayCaller {
   }
 ```
 
-Note that a [`GatewayContract`](../../gateway/GatewayContract.sol) contract is already predeployed on the fhEVM testnet, and a default relayer account is added through the specification of the environment variable `PRIVATE_KEY_GATEWAY_RELAYER` in the `.env` file. Relayers are the only accounts authorized to fulfil the decryption requests. However `GatewayContract` would still check the KMS signature during the fulfilment, so we trust the relayer only to forward the request on time, a rogue relayer could not cheat by sending fake decryption results.
+## `GatewayContract` set up
+
+The [`GatewayContract`](../../gateway/GatewayContract.sol) is pre-deployed on the fhEVM testnet. It uses a default relayer account specified in the `PRIVATE_KEY_GATEWAY_RELAYER` or `ADDRESS_GATEWAY_RELAYER` environment variable in the `.env` file.
+
+Relayers are the only accounts authorized to fulfill decryption requests. The role of the `GatewayContract`, however, is to independently verify the KMS signature during execution. This ensures that the relayers cannot manipulate or send fraudulent decryption results, even if compromised.
+However, the relayers are still trusted to forward decryption requests on time.
+
+## `Gateway.requestDecryption` function
 
 The interface of the `Gateway.requestDecryption` function from previous snippet is the following:
 
@@ -42,6 +53,8 @@ function requestDecryption(
     bool passSignaturesToCaller
 ) returns(uint256 requestID)
 ```
+
+### Parameters
 
 The first argument, `ct`, should be an array of ciphertexts handles which could be of different types, i.e `uint256` values coming from unwrapping handles of type either `ebool`, `euint4`, `euint8`, `euint16`, `euint32`, `euint64` or `eaddress`. `ct` is the list of ciphertexts that are requested to be decrypted. Calling `requestDecryption` will emit an `EventDecryption` on the `GatewayContract` contract which will be detected by a relayer. Then, the relayer will send the corresponding ciphertexts to the KMS for decryption before fulfilling the request.
 
@@ -95,7 +108,7 @@ function addParamsEUint32(uint256 requestID, euint32 _euint32) internal;
 
 function addParamsEUint64(uint256 requestID, euint64 _euint64) internal;
 
-function addParamsEAddress(uint256 requestID, address _eaddress) internal;
+function addParamsEAddress(uint256 requestID, eaddress _eaddress) internal;
 
 function addParamsAddress(uint256 requestID, address _address) internal;
 
@@ -167,17 +180,17 @@ event ResultCallback(uint256 indexed requestID, bool success, bytes result);
 
 The first argument is the `requestID` of the corresponding decryption request, `success` is a boolean assessing if the call to the callback succeeded, and `result` is the bytes array corresponding the to return data from the callback.
 
-In your hardhat tests, if you sent some transactions which are requesting one or several decryptions and you wish to await the fulfilment of those decryptions, you should import the two helper methods `asyncDecrypt` and `awaitAllDecryptionResults` from the `asyncDecrypt.ts` utility file. This would work both when testing on an fhEVM node or in mocked mode. Here is a simple hardhat test for the previous `TestAsyncDecrypt` contract (more examples can be seen [here](../../test/gatewayDecrypt/testAsyncDecrypt.ts)):
+In your hardhat tests, if you sent some transactions which are requesting one or several decryptions and you wish to await the fulfilment of those decryptions, you should import the two helper methods `initGateway` and `awaitAllDecryptionResults` from the `asyncDecrypt.ts` utility file. This would work both when testing on an fhEVM node or in mocked mode. Here is a simple hardhat test for the previous `TestAsyncDecrypt` contract (more examples can be seen [here](../../test/gatewayDecrypt/testAsyncDecrypt.ts)):
 
 ```js
-import { asyncDecrypt, awaitAllDecryptionResults } from "../asyncDecrypt";
+import { initGateway, awaitAllDecryptionResults } from "../asyncDecrypt";
 import { getSigners, initSigners } from "../signers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
 describe("TestAsyncDecrypt", function () {
   before(async function () {
-    await asyncDecrypt();
+    await initGateway();
     await initSigners(3);
     this.signers = await getSigners();
   });
@@ -197,5 +210,5 @@ describe("TestAsyncDecrypt", function () {
 });
 ```
 
-You should setup the gateway handler by calling `asyncDecrypt` at the top of the `before` block.
-Notice that when testing on the fhEVM, a decryption is fulfilled usually 2 blocks after the request, while in mocked mode the fulfilment will always happen as soon as you call the `awaitAllDecryptionResults` helper function. A good way to standardize hardhat tests is hence to always call`awaitAllDecryptionResults` which will ensure that all pending decryptions are fulfilled in both modes.
+You should initialize the gateway by calling `initGateway` at the top of the `before` block - more specifically, before doing any transaction which could involve a decryption request.
+Notice that when testing on the fhEVM, a decryption is fulfilled usually 2 blocks after the request, while in mocked mode the fulfilment will always happen as soon as you call the `awaitAllDecryptionResults` helper function. A good way to standardize hardhat tests is hence to always call the `awaitAllDecryptionResults` function which will ensure that all pending decryptions are fulfilled in both modes.

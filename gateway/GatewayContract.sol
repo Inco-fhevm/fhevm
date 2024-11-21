@@ -6,11 +6,9 @@ import "../lib/TFHE.sol";
 import "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
-import "../lib/KMSVerifierAddress.sol";
-import "../lib/ACLAddress.sol";
 import "./IKMSVerifier.sol";
 
-contract GatewayContract is UUPSUpgradeable, Ownable2StepUpgradeable {
+contract GatewayContract is UUPSUpgradeable, Ownable2StepUpgradeable, IFHEVMProviderReceiver {
     /// @notice Name of the contract
     string private constant CONTRACT_NAME = "GatewayContract";
 
@@ -19,8 +17,7 @@ contract GatewayContract is UUPSUpgradeable, Ownable2StepUpgradeable {
     uint256 private constant MINOR_VERSION = 1;
     uint256 private constant PATCH_VERSION = 0;
 
-    IKMSVerifier private constant kmsVerifier = IKMSVerifier(kmsVerifierAdd);
-    address private constant aclAddress = aclAdd;
+    IFHEVMConfigProvider private fhevmProvider;
 
     uint256 private constant MAX_DELAY = 1 days;
 
@@ -43,9 +40,9 @@ contract GatewayContract is UUPSUpgradeable, Ownable2StepUpgradeable {
         bool passSignaturesToCaller
     );
 
-    event AddedRelayer(address indexed realyer);
+    event AddedRelayer(address indexed relayer);
 
-    event RemovedRelayer(address indexed realyer);
+    event RemovedRelayer(address indexed relayer);
 
     event ResultCallback(uint256 indexed requestID, bool success, bytes result);
 
@@ -94,6 +91,10 @@ contract GatewayContract is UUPSUpgradeable, Ownable2StepUpgradeable {
 
     function initialize(address _gatewayOwner) external initializer {
         __Ownable_init(_gatewayOwner);
+    }
+
+    function setFHEVMProvider(address fhevmProviderAddress) external onlyOwner {
+        fhevmProvider = IFHEVMConfigProvider(fhevmProviderAddress);
     }
 
     modifier onlyRelayer() {
@@ -177,8 +178,15 @@ contract GatewayContract is UUPSUpgradeable, Ownable2StepUpgradeable {
         bytes[] memory signatures
     ) external payable virtual onlyRelayer {
         GatewayContractStorage storage $ = _getGatewayContractStorage();
+        FHEVMConfig.FHEVMConfigStruct memory config = fhevmProvider.getFHEVMConfig();
+        IKMSVerifier kmsVerifier = IKMSVerifier(config.KMSVerifierAddress);
         require(
-            kmsVerifier.verifySignatures(aclAddress, $.decryptionRequests[requestID].cts, decryptedCts, signatures),
+            kmsVerifier.verifyDecryptionEIP712KMSSignatures(
+                config.ACLAddress,
+                $.decryptionRequests[requestID].cts,
+                decryptedCts,
+                signatures
+            ),
             "KMS signature verification failed"
         );
         require(!$.isFulfilled[requestID], "Request is already fulfilled");

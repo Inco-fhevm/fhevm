@@ -3,13 +3,13 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import { ethers, upgrades } from 'hardhat';
 
+import { ACL__factory } from '../../types';
 import { getSigners, initSigners } from '../signers';
 
 describe('Upgrades', function () {
   before(async function () {
     await initSigners(2);
     this.signers = await getSigners();
-    this.aclFactory = await ethers.getContractFactory('ACL');
     this.aclFactoryUpgraded = await ethers.getContractFactory('ACLUpgradedExample');
     this.kmsFactory = await ethers.getContractFactory('KMSVerifier');
     this.kmsFactoryUpgraded = await ethers.getContractFactory('KMSVerifierUpgradedExample');
@@ -92,11 +92,11 @@ describe('Upgrades', function () {
 
   it('original owner upgrades the original ACL and transfer ownership', async function () {
     const origACLAdd = dotenv.parse(fs.readFileSync('lib/.env.acl')).ACL_CONTRACT_ADDRESS;
-    const deployer = (await ethers.getSigners())[9];
+    const deployer = new ethers.Wallet(process.env.PRIVATE_KEY_FHEVM_DEPLOYER!).connect(ethers.provider);
     const acl = await this.aclFactory.attach(origACLAdd, deployer);
     expect(await acl.getVersion()).to.equal('ACL v0.1.0');
     const newaclFactoryUpgraded = await ethers.getContractFactory('ACLUpgradedExample', deployer);
-    const acl2 = await upgrades.upgradeProxy(acl, newaclFactoryUpgraded);
+    const acl2 = ACL__factory.connect(await (await upgrades.upgradeProxy(acl, newaclFactoryUpgraded)).getAddress());
     await acl2.waitForDeployment();
     expect(await acl2.getVersion()).to.equal('ACL v0.2.0');
     expect(await acl2.getAddress()).to.equal(origACLAdd);

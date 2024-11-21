@@ -18,9 +18,9 @@ export function generateFHEPayment(priceData: PriceData): string {
   import "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
   
   error FHEGasBlockLimitExceeded();
+  error UnsupportedOperation();
   error CallerMustBeTFHEExecutorContract();
   error OnlyScalarOperationsAreSupported();
-  error OnlyNonScalarOperationsAreSupported();
   error RecoveryFailed();
   error WithdrawalFailed();
   error AccountNotEnoughFunded();
@@ -37,11 +37,11 @@ export function generateFHEPayment(priceData: PriceData): string {
       uint256 private constant MAJOR_VERSION = 0;
       uint256 private constant MINOR_VERSION = 1;
       uint256 private constant PATCH_VERSION = 0;
-      address public constant tfheExecutorAddress = tfheExecutorAdd;
+      address private constant tfheExecutorAddress = tfheExecutorAdd;
   
       uint256 private constant FHE_GAS_BLOCKLIMIT = 10_000_000;
-      uint256 private constant MIN_FHE_GASPRICE = 10_000_000; // minimum of 0.01 Gwei
-      uint256 private constant FHE_GASPRICE_NATIVE_RATIO = 1000; // fhe gas price is set to 0.1% of native gas price (if above minimum)
+      uint256 private constant MIN_FHE_GASPRICE = 0; // eg: 10_000_000 means a minimum of 0.01 Gwei
+      uint256 private constant FHE_GASPRICE_NATIVE_RATIO = 0; // eg: 1000 means fhe gas price is set to 0.1% of native gas price (if above minimum)
   
       /// @custom:storage-location erc7201:fhevm.storage.FHEPayment
       struct FHEPaymentStorage {
@@ -62,7 +62,8 @@ export function generateFHEPayment(priceData: PriceData): string {
               $.slot := FHEPaymentStorageLocation
           }
       }
-  
+      
+      /// @notice Getter function for the TFHEExecutor contract address
       function getTFHEExecutorAddress() public view virtual returns (address) {
           return tfheExecutorAddress;
       }
@@ -194,7 +195,7 @@ export function generateFHEPayment(priceData: PriceData): string {
       function checkIfNewBlock() internal virtual {
           FHEPaymentStorage storage $ = _getFHEPaymentStorage();
           uint256 lastBlock_ = block.number;
-          if (block.number > $.lastBlock) {
+          if (lastBlock_ > $.lastBlock) {
               $.lastBlock = lastBlock_;
               $.currentBlockConsumption = 0;
           }
@@ -215,6 +216,7 @@ export function generateFHEPayment(priceData: PriceData): string {
     } else {
       output += `        function ${functionName}(address payer, uint8 resultType) external virtual {
         if(msg.sender != tfheExecutorAddress) revert CallerMustBeTFHEExecutorContract();
+        checkIfNewBlock();
 `;
     }
 
@@ -261,11 +263,13 @@ ${generatePriceChecks(data.nonScalar)}
 }
 
 function generatePriceChecks(prices: { [key: string]: number }): string {
-  return Object.entries(prices)
-    .map(
-      ([resultType, price]) => `        if (resultType == ${resultType}) {
+  return (
+    Object.entries(prices)
+      .map(
+        ([resultType, price]) => `        if (resultType == ${resultType}) {
         updateFunding(payer, ${price});
         }`,
-    )
-    .join(' else ');
+      )
+      .join(' else ') + 'else { revert UnsupportedOperation();}'
+  );
 }

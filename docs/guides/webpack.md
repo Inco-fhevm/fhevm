@@ -1,5 +1,7 @@
 # Common webpack errors
 
+This document provides solutions for common Webpack errors encountered during the development process. Follow the steps below to resolve each issue.
+
 ## "Module not found: Error: Can't resolve 'tfhe_bg.wasm'"
 
 In the codebase, there is a `new URL('tfhe_bg.wasm')` which triggers a resolve by Webpack. If you encounter an issue, you can add a fallback for this file by adding a resolve configuration in your `webpack.config.js`:
@@ -46,8 +48,15 @@ If you have an issue with bundling the library (for example with some SSR framew
 ```javascript
 const start = async () => {
   await window.fhevm.initFhevm(); // load wasm needed
-  const instance = window.fhevm.createInstance({ chainId, publicKey }).then((instance) => {
-    console.log(instance);
-  });
+  const instance = window.fhevm
+    .createInstance({
+      kmsContractAddress: "0x208De73316E44722e16f6dDFF40881A3e4F86104",
+      aclContractAddress: "0xc9990FEfE0c27D31D0C2aa36196b085c0c4d456c",
+      network: window.ethereum,
+      gatewayUrl: "https://gateway.zama.ai/",
+    })
+    .then((instance) => {
+      console.log(instance);
+    });
 };
 ```

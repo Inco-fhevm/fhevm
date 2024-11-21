@@ -6,6 +6,19 @@ import "./ACLAddress.sol";
 import "./FHEPaymentAddress.sol";
 import "./KMSVerifierAddress.sol";
 import "./TFHEExecutorAddress.sol";
+import "./InputVerifierAddress.sol";
+
+interface IFHEVMConfigProvider {
+    function getFHEVMConfig() external view returns (FHEVMConfig.FHEVMConfigStruct memory fhevmConfig);
+}
+
+interface IFHEVMConfigReceiver {
+    function setFHEVMConfig(FHEVMConfig.FHEVMConfigStruct memory fhevmConfig) external;
+}
+
+interface IFHEVMProviderReceiver {
+    function setFHEVMProvider(address fhevmProviderAddress) external;
+}
 
 library FHEVMConfig {
     struct FHEVMConfigStruct {
@@ -13,6 +26,7 @@ library FHEVMConfig {
         address TFHEExecutorAddress;
         address FHEPaymentAddress;
         address KMSVerifierAddress;
+        address InputVerifierAddress;
     }
 
     /// @dev Function to return an immutable struct
@@ -22,7 +36,8 @@ library FHEVMConfig {
                 ACLAddress: aclAdd,
                 TFHEExecutorAddress: tfheExecutorAdd,
                 FHEPaymentAddress: fhePaymentAdd,
-                KMSVerifierAddress: kmsVerifierAdd
+                KMSVerifierAddress: kmsVerifierAdd,
+                InputVerifierAddress: inputVerifierAdd
             });
     }
 }

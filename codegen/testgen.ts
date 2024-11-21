@@ -32,7 +32,7 @@ export type OverloadShard = {
  * of a smart contract you can deploy
  */
 export function splitOverloadsToShards(overloads: OverloadSignature[]): OverloadShard[] {
-  const MAX_SHARD_SIZE = 100;
+  const MAX_SHARD_SIZE = 90;
   const res: OverloadShard[] = [];
 
   var shardNo = 1;
@@ -64,15 +64,14 @@ function generateIntroTestCode(shards: OverloadShard[], idxSplit: number): strin
   intro.push(`
     import { expect } from 'chai';
     import { ethers } from 'hardhat';
-    import { createInstances, decrypt4, decrypt8, decrypt16, decrypt32, decrypt64, decryptBool } from '../instance';
+    import { createInstances, decrypt4, decrypt8, decrypt16, decrypt32, decrypt64, decrypt128, decrypt256, decryptBool } from '../instance';
     import { getSigners, initSigners } from '../signers';
 
   `);
-  shards.forEach((os) => {
-    intro.push(`
-  import type { TFHETestSuite${os.shardNumber} } from '../../types/contracts/tests/TFHETestSuite${os.shardNumber}';
+  intro.push(`
+  import type { 
+${shards.map((os) => `    TFHETestSuite${os.shardNumber}`).join(',\n')}  } from '../../types';
   `);
-  });
 
   shards.forEach((os) => {
     intro.push(`
@@ -81,9 +80,7 @@ async function deployTfheTestFixture${os.shardNumber}(): Promise<TFHETestSuite${
   const admin = signers.alice;
 
   const contractFactory = await ethers.getContractFactory('TFHETestSuite${os.shardNumber}');
-  const contract = await contractFactory.connect(admin).deploy({
-    value: ethers.parseEther('0.001'),
-  });
+  const contract = await contractFactory.connect(admin).deploy();
   await contract.waitForDeployment();
 
   return contract;
@@ -214,12 +211,18 @@ function ensureNumberAcceptableInBitRange(bits: number, input: number | bigint) 
     case 64:
       ensureNumberInRange(bits, input, 0x00, 0xffffffffffffffff);
       break;
+    case 128:
+      ensureNumberInRange(bits, input, 0n, BigInt(0xffffffffffffffffffffffffffffffff));
+      break;
+    case 256:
+      ensureNumberInRange(bits, input, 0n, BigInt(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff));
+      break;
     default:
       assert(false, `TODO: add support for ${bits} numbers`);
   }
 }
 
-function ensureNumberInRange(bits: number, input: number | bigint, min: number, max: number) {
+function ensureNumberInRange(bits: number, input: number | bigint, min: number | bigint, max: number | bigint) {
   assert(input >= min && input <= max, `${bits} bit number ${input} doesn't fall into expected [${min}; ${max}] range`);
 }
 
@@ -231,7 +234,6 @@ export function generateSmartContract(os: OverloadShard): string {
         pragma solidity ^0.8.24;
 
         import "../../lib/TFHE.sol";
-        import "../../payment/Payment.sol";
 
         contract TFHETestSuite${os.shardNumber} {
           ebool public resb;
@@ -240,10 +242,11 @@ export function generateSmartContract(os: OverloadShard): string {
           euint16 public res16;
           euint32 public res32;
           euint64 public res64;
+          euint128 public res128;
+          euint256 public res256;
 
-          constructor() payable {
+          constructor() {
             TFHE.setFHEVM(FHEVMConfig.defaultConfig());
-            Payment.depositForThis(msg.value);
           }
 
     `);
@@ -264,6 +267,8 @@ const stateVar = {
   euint16: 'res16',
   euint32: 'res32',
   euint64: 'res64',
+  euint128: 'res128',
+  euint256: 'res256',
 };
 
 function generateLibCallTest(os: OverloadShard, res: string[]) {

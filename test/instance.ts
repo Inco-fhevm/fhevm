@@ -1,6 +1,15 @@
-import { clientKeyDecryptor, createInstance as createFhevmInstance, getCiphertextCallParams } from 'fhevmjs';
+import dotenv from 'dotenv';
+import {
+  clientKeyDecryptor,
+  createEIP712,
+  createInstance as createFhevmInstance,
+  generateKeypair,
+  getCiphertextCallParams,
+} from 'fhevmjs';
+import * as fs from 'fs';
 import { readFileSync } from 'fs';
-import { ethers, ethers as hethers, network } from 'hardhat';
+import hre, { ethers, ethers as hethers, network } from 'hardhat';
+import { HttpNetworkConfig, NetworkConfig } from 'hardhat/types';
 import { homedir } from 'os';
 import path from 'path';
 
@@ -13,13 +22,20 @@ const FHE_CLIENT_KEY_PATH = process.env.FHE_CLIENT_KEY_PATH;
 
 let clientKey: Uint8Array | undefined;
 
+const kmsAdd = dotenv.parse(fs.readFileSync('lib/.env.kmsverifier')).KMS_VERIFIER_CONTRACT_ADDRESS;
+const aclAdd = dotenv.parse(fs.readFileSync('lib/.env.acl')).ACL_CONTRACT_ADDRESS;
+
 const createInstanceMocked = async () => {
-  const instance = await createFhevmInstance({
-    chainId: network.config.chainId,
-  });
-  instance.reencrypt = reencryptRequestMocked;
-  instance.createEncryptedInput = createEncryptedInputMocked;
-  instance.getPublicKey = () => '0xFFAA44433';
+  const { chainId } = await hre.ethers.provider.getNetwork();
+  const instance = {
+    reencrypt: reencryptRequestMocked,
+    createEncryptedInput: createEncryptedInputMocked,
+    getPublicKey: () => '0xFFAA44433',
+    generateKeypair: generateKeypair,
+    createEIP712: createEIP712(Number(chainId)),
+    // FIXME: provide?
+    getPublicParams: () => ({}),
+  };
   return instance;
 };
 
@@ -42,12 +58,21 @@ export const createInstances = async (accounts: Signers): Promise<FhevmInstances
   return instances;
 };
 
+function isHttpNetworkConfig(config: NetworkConfig): config is HttpNetworkConfig {
+  return 'url' in config;
+}
+
 export const createInstance = async () => {
-  const instance = await createFhevmInstance({
-    networkUrl: network.config.url,
-    gatewayUrl: 'http://localhost:7077',
+  const config = network.config;
+  if (!isHttpNetworkConfig(config)) {
+    throw new Error('Only HTTP network config is supported for FhevmInstance');
+  }
+  return await createFhevmInstance({
+    kmsContractAddress: kmsAdd,
+    aclContractAddress: aclAdd,
+    networkUrl: config.url,
+    gatewayUrl: config.gatewayUrl ?? 'http://localhost:7077',
   });
-  return instance;
 };
 
 const getCiphertext = async (handle: bigint, ethers: typeof hethers): Promise<string> => {
@@ -99,7 +124,7 @@ export const decrypt4 = async (handle: bigint): Promise<bigint> => {
     await awaitCoprocessor();
     return BigInt(await getClearText(handle));
   } else {
-    return getDecryptor().decrypt4(await getCiphertext(handle, ethers));
+    return BigInt(getDecryptor().decrypt4(await getCiphertext(handle, ethers)));
   }
 };
 
@@ -117,7 +142,7 @@ export const decrypt8 = async (handle: bigint): Promise<bigint> => {
     await awaitCoprocessor();
     return BigInt(await getClearText(handle));
   } else {
-    return getDecryptor().decrypt8(await getCiphertext(handle, ethers));
+    return BigInt(getDecryptor().decrypt8(await getCiphertext(handle, ethers)));
   }
 };
 
@@ -135,7 +160,7 @@ export const decrypt16 = async (handle: bigint): Promise<bigint> => {
     await awaitCoprocessor();
     return BigInt(await getClearText(handle));
   } else {
-    return getDecryptor().decrypt16(await getCiphertext(handle, ethers));
+    return BigInt(getDecryptor().decrypt16(await getCiphertext(handle, ethers)));
   }
 };
 
@@ -153,7 +178,7 @@ export const decrypt32 = async (handle: bigint): Promise<bigint> => {
     await awaitCoprocessor();
     return BigInt(await getClearText(handle));
   } else {
-    return getDecryptor().decrypt32(await getCiphertext(handle, ethers));
+    return BigInt(getDecryptor().decrypt32(await getCiphertext(handle, ethers)));
   }
 };
 
@@ -182,6 +207,42 @@ export const decrypt64 = async (handle: bigint): Promise<bigint> => {
  * In production, decryption is only possible via an asyncronous on-chain call to the Gateway.
  *
  * @param {bigint} a handle to decrypt
+ * @returns {bigint}
+ */
+export const decrypt128 = async (handle: bigint): Promise<bigint> => {
+  if (network.name === 'hardhat') {
+    await awaitCoprocessor();
+    return BigInt(await getClearText(handle));
+  } else {
+    return getDecryptor().decrypt128(await getCiphertext(handle, ethers));
+  }
+};
+
+/**
+ * @debug
+ * This function is intended for debugging purposes only.
+ * It cannot be used in production code, since it requires the FHE private key for decryption.
+ * In production, decryption is only possible via an asyncronous on-chain call to the Gateway.
+ *
+ * @param {bigint} a handle to decrypt
+ * @returns {bigint}
+ */
+export const decrypt256 = async (handle: bigint): Promise<bigint> => {
+  if (network.name === 'hardhat') {
+    await awaitCoprocessor();
+    return BigInt(await getClearText(handle));
+  } else {
+    return getDecryptor().decrypt256(await getCiphertext(handle, ethers));
+  }
+};
+
+/**
+ * @debug
+ * This function is intended for debugging purposes only.
+ * It cannot be used in production code, since it requires the FHE private key for decryption.
+ * In production, decryption is only possible via an asyncronous on-chain call to the Gateway.
+ *
+ * @param {bigint} a handle to decrypt
  * @returns {string}
  */
 export const decryptAddress = async (handle: bigint): Promise<string> => {
@@ -192,5 +253,59 @@ export const decryptAddress = async (handle: bigint): Promise<string> => {
     return handleStr;
   } else {
     return getDecryptor().decryptAddress(await getCiphertext(handle, ethers));
+  }
+};
+
+/**
+ * @debug
+ * This function is intended for debugging purposes only.
+ * It cannot be used in production code, since it requires the FHE private key for decryption.
+ * In production, decryption is only possible via an asyncronous on-chain call to the Gateway.
+ *
+ * @param {bigint} a handle to decrypt
+ * @returns {bigint}
+ */
+export const decryptEbytes64 = async (handle: bigint): Promise<bigint> => {
+  if (network.name === 'hardhat') {
+    await awaitCoprocessor();
+    return BigInt(await getClearText(handle));
+  } else {
+    return getDecryptor().decryptEbytes64(await getCiphertext(handle, ethers));
+  }
+};
+
+/**
+ * @debug
+ * This function is intended for debugging purposes only.
+ * It cannot be used in production code, since it requires the FHE private key for decryption.
+ * In production, decryption is only possible via an asyncronous on-chain call to the Gateway.
+ *
+ * @param {bigint} a handle to decrypt
+ * @returns {bigint}
+ */
+export const decryptEbytes128 = async (handle: bigint): Promise<bigint> => {
+  if (network.name === 'hardhat') {
+    await awaitCoprocessor();
+    return BigInt(await getClearText(handle));
+  } else {
+    return getDecryptor().decryptEbytes128(await getCiphertext(handle, ethers));
+  }
+};
+
+/**
+ * @debug
+ * This function is intended for debugging purposes only.
+ * It cannot be used in production code, since it requires the FHE private key for decryption.
+ * In production, decryption is only possible via an asyncronous on-chain call to the Gateway.
+ *
+ * @param {bigint} a handle to decrypt
+ * @returns {bigint}
+ */
+export const decryptEbytes256 = async (handle: bigint): Promise<bigint> => {
+  if (network.name === 'hardhat') {
+    await awaitCoprocessor();
+    return BigInt(await getClearText(handle));
+  } else {
+    return getDecryptor().decryptEbytes256(await getCiphertext(handle, ethers));
   }
 };
